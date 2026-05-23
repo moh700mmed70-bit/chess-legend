@@ -1,25 +1,14 @@
 /**
- * Chess Legend v7.0 - The Engineered Solution
- * Comprehensive isolation, precision analysis, and interactive training.
+ * Chess Legend - Diamond Review Edition
  */
 
 'use strict';
 
 (function() {
-  // ============ CONFIGURATION ============
   const CONFIG = {
     STOCKFISH_PATH: 'stockfish.js',
-    DEPTH: 16,
-    MAX_GAMES: 10,
-    CLASSIFICATION: {
-      BRILLIANT: 0.1, // If diff is tiny and score is very high
-      BEST: 0.2,      // Loss less than 0.2
-      EXCELLENT: 0.5, // Loss less than 0.5
-      GOOD: 0.8,      // Loss less than 0.8
-      INACCURACY: 1.5,// Loss more than 0.8
-      MISTAKE: 2.5,   // Loss more than 1.5
-      BLUNDER: 99.0   // Loss more than 2.5
-    }
+    DEPTH: 18,
+    MAX_GAMES: 10
   };
 
   const state = {
@@ -27,17 +16,10 @@
     games: [],
     currentGame: null,
     currentMoveIndex: 0,
-    history: [], // {fen, move, uci, score, classification}
+    history: [], // {fen, move, uci, score, classification, explanation}
     engine: null,
     isEngineReady: false,
-    activeTab: 'analysis',
     boardFlipped: false,
-    // Training State
-    trainingMode: null, // 'opening', 'puzzle', 'endgame'
-    trainingData: null,
-    trainingChess: new Chess(),
-    draggedFrom: null,
-    bestMove: null,
     lastScore: 0
   };
 
@@ -47,28 +29,17 @@
     moveHistory: document.getElementById('moveHistory'),
     evalFill: document.getElementById('evalFill'),
     evalText: document.getElementById('evalText'),
-    feedbackArea: document.getElementById('feedbackArea'),
+    coachExplanation: document.getElementById('coachExplanation'),
     loginPanel: document.getElementById('loginPanel'),
     mainDashboard: document.getElementById('mainDashboard'),
-    tabBtns: document.querySelectorAll('.tab-btn'),
-    tabPanels: document.querySelectorAll('.tab-content-panel'),
-    openingsList: document.getElementById('openingsList'),
-    puzzlesList: document.getElementById('puzzlesList'),
-    endgamesList: document.getElementById('endgamesList'),
     usernameInput: document.getElementById('usernameInput'),
     fetchBtn: document.getElementById('fetchBtn'),
     statusBar: document.getElementById('statusBar'),
     statusText: document.getElementById('statusText')
   };
 
-  // ============ INITIALIZATION ============
   function init() {
     elements.fetchBtn.addEventListener('click', startApp);
-    elements.tabBtns.forEach(btn => {
-      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
-    });
-    
-    // Board Controls
     document.getElementById('prevMove').addEventListener('click', () => navigate(-1));
     document.getElementById('nextMove').addEventListener('click', () => navigate(1));
     document.getElementById('firstMove').addEventListener('click', () => navigate(-999));
@@ -77,11 +48,9 @@
       state.boardFlipped = !state.boardFlipped;
       renderBoard();
     });
-
     initEngine();
   }
 
-  // ============ ENGINE LOGIC ============
   function initEngine() {
     if (state.engine) state.engine.terminate();
     state.engine = new Worker(CONFIG.STOCKFISH_PATH + '?v=' + Date.now());
@@ -98,10 +67,7 @@
     if (msg.includes('score cp') || msg.includes('score mate')) {
       const score = parseScore(msg);
       updateEvalUI(score);
-      if (!state.trainingMode) calculateClassification(score);
-    }
-    if (msg.startsWith('bestmove')) {
-      state.bestMove = msg.split(' ')[1];
+      calculateDiamondReview(score);
     }
   }
 
@@ -111,28 +77,23 @@
     return 'M' + Math.abs(mate);
   }
 
-  // ============ APP CORE FLOW ============
   async function startApp() {
     const user = elements.usernameInput.value.trim();
     if (!user) return;
     state.username = user;
-    
-    toggleStatus(true, 'جاري جلب بياناتك من Chess.com...');
+    toggleStatus(true, 'جاري جلب مبارياتك من Chess.com...');
     try {
       const res = await fetch(`https://api.chess.com/pub/player/${user}/games/archives`);
       const archives = (await res.json()).archives;
       const gamesRes = await fetch(archives[archives.length - 1]);
       state.games = (await gamesRes.json()).games.slice(-CONFIG.MAX_GAMES).reverse();
-      
       elements.loginPanel.classList.add('hidden');
       elements.mainDashboard.classList.remove('hidden');
       toggleStatus(false);
-      
       renderGameList();
       if (state.games.length > 0) selectGame(0);
-      populateTraining();
     } catch (e) {
-      toggleStatus(true, 'حدث خطأ. تأكد من اسم المستخدم.');
+      toggleStatus(true, 'خطأ: تأكد من اسم المستخدم.');
     }
   }
 
@@ -141,19 +102,13 @@
     elements.statusText.textContent = text;
   }
 
-  // ============ ANALYSIS SYSTEM ============
   window.selectGame = (index) => {
     state.currentGame = state.games[index];
-    state.trainingMode = null;
-    elements.feedbackArea.innerHTML = '';
-    
     const chess = new Chess();
     chess.load_pgn(state.currentGame.pgn);
     const moves = chess.history({ verbose: true });
-    
     const temp = new Chess();
-    state.history = [{ fen: temp.fen(), move: 'البداية', uci: '', score: 0, classification: 'book' }];
-    
+    state.history = [{ fen: temp.fen(), move: 'البداية', uci: '', score: 0, classification: 'book', explanation: 'بداية المباراة. كل الحظ للمتلاعبين!' }];
     for (let m of moves) {
       temp.move(m);
       state.history.push({
@@ -161,11 +116,11 @@
         move: m.san,
         uci: m.from + m.to + (m.promotion || ''),
         score: 0,
-        classification: 'good'
+        classification: 'good',
+        explanation: ''
       });
     }
-    
-    state.currentMoveIndex = state.history.length - 1;
+    state.currentMoveIndex = 0;
     renderGameList();
     renderMoveHistory();
     renderBoard();
@@ -174,9 +129,9 @@
 
   function renderGameList() {
     elements.gameList.innerHTML = state.games.map((g, i) => `
-      <div class="card ${state.currentGame === g ? 'active' : ''}" onclick="window.selectGame(${i})">
+      <div class="game-card ${state.currentGame === g ? 'active' : ''}" onclick="window.selectGame(${i})">
         <strong>${g.white.username} vs ${g.black.username}</strong>
-        <div style="font-size: 0.75rem; color: var(--text-dim)">${new Date(g.end_time * 1000).toLocaleDateString()}</div>
+        <div style="font-size: 0.7rem; color: var(--text-dim)">${new Date(g.end_time * 1000).toLocaleDateString()}</div>
       </div>
     `).join('');
   }
@@ -190,7 +145,7 @@
       html += `
         <div class="move-val ${active}" onclick="window.goTo(${i})">
           ${m.move}
-          <span class="badge badge-${m.classification}">${getBadgeIcon(m.classification)}</span>
+          <span class="badge badge-${m.classification}">${getIcon(m.classification)}</span>
         </div>
       `;
     }
@@ -198,8 +153,8 @@
     elements.moveHistory.innerHTML = html;
   }
 
-  function getBadgeIcon(cls) {
-    const icons = { brilliant: '!!', best: '★', great: '!', good: '✓', inaccuracy: '?!', mistake: '?', blunder: '??', book: '📖' };
+  function getIcon(cls) {
+    const icons = { brilliant: '!!', best: '★', great: '!', good: '✓', blunder: '??', book: '📖' };
     return icons[cls] || '';
   }
 
@@ -207,6 +162,7 @@
     state.currentMoveIndex = i;
     renderBoard();
     renderMoveHistory();
+    elements.coachExplanation.textContent = state.history[i].explanation || 'جاري تحليل النقلة من قبل المدرب...';
     analyze();
   };
 
@@ -217,191 +173,47 @@
     window.goTo(n);
   }
 
-  // ============ THE ROCK SOLID BOARD ============
   function renderBoard() {
-    const fen = state.trainingMode ? state.trainingChess.fen() : state.history[state.currentMoveIndex].fen;
+    const fen = state.history[state.currentMoveIndex].fen;
     const pos = fen.split(' ')[0];
     const rows = pos.split('/');
     elements.mainBoard.innerHTML = '';
-    
-    let boardArr = [];
+    let board = [];
     for (let row of rows) {
       let r = [];
       for (let c of row) {
         if (isNaN(c)) r.push(c);
         else for (let i=0; i<parseInt(c); i++) r.push(null);
       }
-      boardArr.push(r);
+      board.push(r);
     }
-
     for (let i = 0; i < 8; i++) {
       const r = state.boardFlipped ? 7 - i : i;
       for (let j = 0; j < 8; j++) {
         const c = state.boardFlipped ? 7 - j : j;
         const square = document.createElement('div');
         square.className = `square ${(r+c)%2===0?'light':'dark'}`;
-        square.dataset.pos = getSqName(r, c);
-        
-        const piece = boardArr[r][c];
+        square.dataset.pos = String.fromCharCode(97 + c) + (8 - r);
+        const piece = board[r][c];
         if (piece) {
           const img = document.createElement('img');
-          img.src = getPieceImg(piece);
+          img.src = `https://lichess1.org/assets/piece/cburnett/${piece === piece.toUpperCase() ? 'w' : 'b'}${piece.toUpperCase()}.svg`;
           img.className = 'piece';
-          img.draggable = true;
-          img.dataset.from = square.dataset.pos;
-          img.addEventListener('dragstart', (e) => state.draggedFrom = e.target.dataset.from);
           square.appendChild(img);
         }
-        
-        square.addEventListener('dragover', e => e.preventDefault());
-        square.addEventListener('drop', handleDrop);
         elements.mainBoard.appendChild(square);
       }
     }
-    
-    // Highlight last move in analysis
-    if (!state.trainingMode && state.currentMoveIndex > 0) {
+    if (state.currentMoveIndex > 0) {
       const uci = state.history[state.currentMoveIndex].uci;
-      if (uci) {
-        highlightSq(uci.substring(0,2));
-        highlightSq(uci.substring(2,4));
-      }
+      highlight(uci.substring(0,2));
+      highlight(uci.substring(2,4));
     }
   }
 
-  function handleDrop(e) {
-    const to = e.currentTarget.dataset.pos;
-    const from = state.draggedFrom;
-    if (!from || from === to) return;
-    
-    const chess = state.trainingMode ? state.trainingChess : new Chess(state.history[state.currentMoveIndex].fen);
-    const move = chess.move({ from, to, promotion: 'q' });
-    
-    if (move) {
-      if (state.trainingMode) {
-        handleTrainingMove(move);
-      } else {
-        // Manual move in analysis
-        state.history = state.history.slice(0, state.currentMoveIndex + 1);
-        state.history.push({
-          fen: chess.fen(),
-          move: move.san,
-          uci: from + to + (move.promotion || ''),
-          score: 0,
-          classification: 'good'
-        });
-        state.currentMoveIndex++;
-        renderBoard();
-        renderMoveHistory();
-        analyze();
-      }
-    }
-  }
-
-  function highlightSq(pos, cls = 'last-move') {
+  function highlight(pos) {
     const sq = document.querySelector(`[data-pos="${pos}"]`);
-    if (sq) sq.classList.add(cls);
-  }
-
-  function getSqName(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
-  function getPieceImg(p) {
-    const color = p === p.toUpperCase() ? 'w' : 'b';
-    const type = p.toLowerCase();
-    const map = {p:'P', r:'R', n:'N', b:'B', q:'Q', k:'K'};
-    return `https://lichess1.org/assets/piece/cburnett/${color}${map[type]}.svg`;
-  }
-
-  // ============ TRAINING SYSTEM ============
-  function populateTraining() {
-    const data = {
-      openings: [
-        { name: 'Ruy Lopez', fen: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3', target: 'a6', desc: 'دفاع مورفي الكلاسيكي.' },
-        { name: 'Sicilian', fen: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2', target: 'Nf3', desc: 'تطوير الحصان للسيطرة.' }
-      ],
-      puzzles: [
-        { name: 'كش مات في نقلة', fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4', target: 'Qxf7#', desc: 'أنهِ المباراة فوراً.' }
-      ],
-      endgames: [
-        { name: 'نهاية ملك ورخ', fen: '8/8/8/8/8/2k5/2r5/4K3 w - - 0 1', target: 'Kf1', desc: 'حافظ على التعادل.' }
-      ]
-    };
-
-    elements.openingsList.innerHTML = data.openings.map((o, i) => renderTrainCard(o, 'opening', i)).join('');
-    elements.puzzlesList.innerHTML = data.puzzles.map((p, i) => renderTrainCard(p, 'puzzle', i)).join('');
-    elements.endgamesList.innerHTML = data.endgames.map((e, i) => renderTrainCard(e, 'endgame', i)).join('');
-  }
-
-  function renderTrainCard(item, type, index) {
-    return `
-      <div class="card">
-        <strong>${item.name}</strong>
-        <p style="font-size:0.85rem; color:var(--text-dim); margin:5px 0;">${item.desc}</p>
-        <button class="btn" style="width:100%; padding:8px;" onclick="window.startTrain('${type}', ${index})">تدرب الآن</button>
-      </div>
-    `;
-  }
-
-  window.startTrain = (type, index) => {
-    state.trainingMode = type;
-    const pool = type === 'opening' ? [
-      { name: 'Ruy Lopez', fen: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3', target: 'a6' },
-      { name: 'Sicilian', fen: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2', target: 'Nf3' }
-    ] : type === 'puzzle' ? [
-      { name: 'كش مات في نقلة', fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4', target: 'Qxf7#' }
-    ] : [
-      { name: 'نهاية ملك ورخ', fen: '8/8/8/8/8/2k5/2r5/4K3 w - - 0 1', target: 'Kf1' }
-    ];
-    
-    state.trainingData = pool[index];
-    state.trainingChess = new Chess(state.trainingData.fen);
-    switchTab('analysis'); // Go back to board view
-    renderBoard();
-    elements.feedbackArea.innerHTML = `
-      <div class="msg-box">الهدف: ابحث عن النقلة الصحيحة في وضع ${state.trainingData.name}</div>
-    `;
-  };
-
-  function handleTrainingMove(move) {
-    const uci = move.from + move.to;
-    const isCorrect = (uci === state.trainingData.target || move.san === state.trainingData.target);
-    
-    renderBoard(); // Update pieces first
-    if (isCorrect) {
-      highlightSq(move.to, 'correct');
-      elements.feedbackArea.innerHTML = `
-        <div class="msg-box msg-success">أحسنت! هذه هي النقلة الصحيحة.</div>
-        <button class="btn btn-secondary" style="width:100%" onclick="window.resetTraining()">إعادة المحاولة</button>
-      `;
-    } else {
-      highlightSq(move.to, 'wrong');
-      elements.feedbackArea.innerHTML = `
-        <div class="msg-box msg-error">نقلة خاطئة. حاول مرة أخرى.</div>
-        <button class="btn btn-secondary" style="width:100%" onclick="window.resetTraining()">إعادة المحاولة</button>
-      `;
-      setTimeout(() => {
-        state.trainingChess.undo();
-        renderBoard();
-      }, 1000);
-    }
-  }
-
-  window.resetTraining = () => {
-    state.trainingChess = new Chess(state.trainingData.fen);
-    renderBoard();
-    elements.feedbackArea.innerHTML = `<div class="msg-box">الهدف: ابحث عن النقلة الصحيحة في وضع ${state.trainingData.name}</div>`;
-  };
-
-  // ============ ANALYZER & CLASSIFICATION ============
-  function switchTab(tabId) {
-    state.activeTab = tabId;
-    elements.tabBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId));
-    elements.tabPanels.forEach(panel => {
-      panel.classList.toggle('active', panel.id === tabId + 'Panel');
-    });
-    // Reset board state if needed
-    if (tabId !== 'analysis') {
-      elements.feedbackArea.innerHTML = '';
-    }
+    if (sq) sq.classList.add('last-move');
   }
 
   function updateEvalUI(score) {
@@ -412,28 +224,40 @@
     elements.evalFill.style.height = `${h}%`;
   }
 
-  function calculateClassification(score) {
+  function calculateDiamondReview(score) {
     if (state.currentMoveIndex === 0) return;
     const current = parseFloat(score) || 0;
     const diff = Math.abs(current - state.lastScore);
     state.lastScore = current;
 
     let cls = 'good';
-    if (diff < CONFIG.CLASSIFICATION.BRILLIANT && Math.abs(current) > 2.0) cls = 'brilliant';
-    else if (diff < CONFIG.CLASSIFICATION.BEST) cls = 'best';
-    else if (diff < CONFIG.CLASSIFICATION.EXCELLENT) cls = 'great';
-    else if (diff > 2.5) cls = 'blunder';
-    else if (diff > 1.5) cls = 'mistake';
-    else if (diff > 0.8) cls = 'inaccuracy';
-    
+    let exp = 'نقلة جيدة تحافظ على توازن المباراة.';
+
+    if (diff < 0.1 && Math.abs(current) > 2.0) {
+      cls = 'brilliant';
+      exp = 'يا لها من نقلة عبقرية! لقد وجدت أفضل تكتيك في هذا الوضع المعقد.';
+    } else if (diff < 0.2) {
+      cls = 'best';
+      exp = 'هذه هي أفضل نقلة ممكنة. أنت تلعب بدقة المحترفين.';
+    } else if (diff < 0.5) {
+      cls = 'great';
+      exp = 'نقلة قوية جداً تزيد من ضغطك على الخصم.';
+    } else if (diff > 2.5) {
+      cls = 'blunder';
+      exp = 'خطأ فادح! لقد فوتّ فرصة كبيرة أو خسرت أفضلية واضحة هنا.';
+    } else if (diff > 1.0) {
+      exp = 'نقلة غير دقيقة، كان بإمكانك إيجاد خيار أفضل للسيطرة على الرقعة.';
+    }
+
     state.history[state.currentMoveIndex].classification = cls;
+    state.history[state.currentMoveIndex].explanation = exp;
+    elements.coachExplanation.textContent = exp;
     renderMoveHistory();
   }
 
   function analyze() {
-    if (!state.isEngineReady || state.trainingMode) return;
-    const fen = state.history[state.currentMoveIndex].fen;
-    state.engine.postMessage(`position fen ${fen}`);
+    if (!state.isEngineReady) return;
+    state.engine.postMessage(`position fen ${state.history[state.currentMoveIndex].fen}`);
     state.engine.postMessage(`go depth ${CONFIG.DEPTH}`);
   }
 

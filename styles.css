@@ -1,23 +1,22 @@
-/* ============ CHESS LEGEND ULTIMATE PRO ============ */
+/* ============ CHESS LEGEND DIAMOND REVIEW ============ */
 :root {
   --bg-dark: #312e2b;
   --bg-panel: #262421;
   --bg-sidebar: #21201d;
   --accent: #81b64c;
   --accent-hover: #a3d16a;
+  --diamond: #1ba5d0;
   --text-main: #ffffff;
   --text-dim: #989795;
   --board-light: #eeeed2;
   --board-dark: #769656;
   --last-move: rgba(255, 255, 0, 0.5);
-  --correct: rgba(129, 182, 76, 0.7);
-  --wrong: rgba(250, 65, 45, 0.7);
   --brilliant: #1ba5d0;
   --great: #5c8bb0;
   --best: #81b64c;
   --blunder: #fa412d;
-  --radius: 4px;
-  --shadow: 0 8px 32px rgba(0,0,0,0.6);
+  --radius: 6px;
+  --shadow: 0 12px 40px rgba(0,0,0,0.7);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -26,49 +25,38 @@ body {
   color: var(--text-main);
   font-family: -apple-system, system-ui, sans-serif;
   direction: rtl;
-  overflow-x: hidden;
   min-height: 100vh;
 }
 
 .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
 .hidden { display: none !important; }
 
-/* ============ TABS NAVIGATION ============ */
-.tabs-nav {
-  display: flex;
-  background: var(--bg-panel);
-  padding: 6px;
-  border-radius: var(--radius);
-  margin-bottom: 25px;
-  box-shadow: var(--shadow);
+/* ============ HEADER & BADGES ============ */
+header { text-align: center; margin-bottom: 30px; }
+h1 { font-size: 2.5rem; display: flex; align-items: center; justify-content: center; gap: 15px; }
+.badge-diamond {
+  background: linear-gradient(135deg, #1ba5d0, #5c8bb0);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  color: #fff;
+  letter-spacing: 1px;
+  box-shadow: 0 0 15px rgba(27, 165, 208, 0.4);
 }
-.tab-btn {
-  flex: 1;
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  padding: 14px;
-  font-weight: 800;
-  cursor: pointer;
-  border-radius: var(--radius);
-  transition: 0.3s;
-  font-size: 1rem;
-}
-.tab-btn.active { background: var(--bg-dark); color: var(--text-main); box-shadow: inset 0 0 10px rgba(0,0,0,0.3); }
-.tab-btn:hover:not(.active) { background: rgba(255,255,255,0.05); color: #fff; }
+.subtitle { color: var(--text-dim); margin-top: 5px; }
 
 /* ============ MAIN LAYOUT ============ */
 .main-layout {
   display: grid;
-  grid-template-columns: 1fr 420px;
-  gap: 25px;
+  grid-template-columns: 1fr 450px;
+  gap: 30px;
   align-items: start;
 }
 
 /* ============ BOARD SECTION ============ */
 .board-section {
   background: var(--bg-panel);
-  padding: 20px;
+  padding: 25px;
   border-radius: var(--radius);
   display: flex;
   gap: 20px;
@@ -76,26 +64,26 @@ body {
 }
 
 .eval-bar {
-  width: 35px;
+  width: 40px;
   height: 600px;
   background: #403d39;
   position: relative;
-  border-radius: 3px;
+  border-radius: 4px;
   overflow: hidden;
-  border: 1px solid #111;
+  border: 2px solid #111;
 }
 .eval-fill {
   position: absolute;
   bottom: 0;
   width: 100%;
   background: #fff;
-  transition: height 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .eval-text {
   position: absolute;
   width: 100%;
   text-align: center;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
   color: #000;
   z-index: 10;
@@ -104,14 +92,14 @@ body {
   text-shadow: 0 0 2px #fff;
 }
 
-.board-container { flex: 1; max-width: 600px; position: relative; }
+.board-container { flex: 1; max-width: 600px; }
 .board {
   width: 100%;
   aspect-ratio: 1/1;
   display: grid;
   grid-template-columns: repeat(8, 12.5%);
   grid-template-rows: repeat(8, 12.5%);
-  border: 5px solid #262421;
+  border: 6px solid #262421;
   background: var(--board-dark);
 }
 .square {
@@ -125,72 +113,53 @@ body {
 .square.light { background-color: var(--board-light); }
 .square.dark { background-color: var(--board-dark); }
 .square.last-move { background-color: var(--last-move); }
-.square.correct { background-color: var(--correct) !important; }
-.square.wrong { background-color: var(--wrong) !important; }
 
-.piece {
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
-  z-index: 5;
-  transition: transform 0.1s;
-}
-.piece:active { transform: scale(1.15); }
+.piece { width: 100%; height: 100%; cursor: pointer; z-index: 5; }
 
-/* ============ SIDEBAR & PANELS ============ */
-.sidebar { display: flex; flex-direction: column; gap: 20px; min-height: 600px; }
-
-/* Isolated Tab Content Panels */
-.tab-content-panel { display: none; flex-direction: column; gap: 20px; }
-.tab-content-panel.active { display: flex; animation: fadeIn 0.4s ease; }
-
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+/* ============ SIDEBAR & COACH ============ */
+.sidebar { display: flex; flex-direction: column; gap: 20px; }
 
 .panel {
   background: var(--bg-panel);
   padding: 20px;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  display: flex;
-  flex-direction: column;
 }
-.panel h3 { color: var(--accent); margin-bottom: 15px; font-size: 1.1rem; border-bottom: 1px solid #333; padding-bottom: 8px; font-weight: 800; }
+.panel h3 { color: var(--accent); margin-bottom: 15px; font-size: 1.1rem; border-bottom: 1px solid #333; padding-bottom: 10px; display: flex; align-items: center; gap: 10px; }
 
-.scroll-area { max-height: 350px; overflow-y: auto; padding-right: 5px; }
+.coach-panel { border-right: 5px solid var(--diamond); background: #2b2d31; }
+.coach-text {
+  font-size: 1.1rem;
+  line-height: 1.6;
+  color: #eee;
+  min-height: 80px;
+  font-style: italic;
+}
+
+.scroll-area { overflow-y: auto; padding-right: 5px; }
 .scroll-area::-webkit-scrollbar { width: 6px; }
 .scroll-area::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
 
-/* Game & Training Cards */
-.card {
-  padding: 15px;
-  background: var(--bg-sidebar);
-  margin-bottom: 12px;
-  border-radius: var(--radius);
-  cursor: pointer;
-  border-right: 5px solid transparent;
-  transition: 0.2s;
-}
-.card:hover { background: #2d2b28; transform: translateX(-5px); }
-.card.active { border-right-color: var(--accent); background: #33312e; }
-
-/* Move History List */
-.move-list { display: grid; grid-template-columns: 45px 1fr 1fr; gap: 4px; font-family: monospace; }
-.move-num { color: var(--text-dim); padding: 8px; text-align: center; background: rgba(0,0,0,0.2); }
+/* Move History */
+.move-list { display: grid; grid-template-columns: 50px 1fr 1fr; gap: 5px; font-family: 'Courier New', monospace; }
+.move-num { color: var(--text-dim); padding: 10px; text-align: center; background: rgba(0,0,0,0.3); border-radius: 4px; }
 .move-val {
-  padding: 8px 12px;
+  padding: 10px 15px;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #262421;
-  border-radius: 2px;
+  background: #21201d;
+  border-radius: 4px;
+  transition: 0.2s;
 }
-.move-val.active { background: #45423e; font-weight: bold; border-bottom: 2px solid var(--accent); }
+.move-val.active { background: #45423e; border-bottom: 3px solid var(--diamond); }
+.move-val:hover { background: #333; }
 
-/* ============ ACCURACY BADGES ============ */
+/* Badges */
 .badge {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -198,70 +167,63 @@ body {
   font-size: 12px;
   font-weight: 900;
   color: #fff;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
-.badge-brilliant { background: var(--brilliant); }
+.badge-brilliant { background: var(--brilliant); box-shadow: 0 0 10px var(--brilliant); }
 .badge-great { background: var(--great); }
 .badge-best { background: var(--best); }
-.badge-blunder { background: var(--blunder); }
+.badge-blunder { background: var(--blunder); box-shadow: 0 0 10px var(--blunder); }
 .badge-book { background: #a88865; }
 
-/* ============ FEEDBACK AREA ============ */
-.feedback-container { margin-top: 20px; }
-.msg-box {
-  padding: 16px;
+/* Game Cards */
+.game-card {
+  padding: 15px;
+  background: var(--bg-sidebar);
+  margin-bottom: 10px;
   border-radius: var(--radius);
-  text-align: center;
-  font-weight: 800;
-  margin-bottom: 15px;
-  border: 2px solid transparent;
+  cursor: pointer;
+  border-right: 5px solid transparent;
+  transition: 0.2s;
 }
-.msg-success { background: rgba(129, 182, 76, 0.15); color: var(--accent); border-color: var(--accent); }
-.msg-error { background: rgba(250, 65, 45, 0.15); color: var(--blunder); border-color: var(--blunder); }
+.game-card.active { border-right-color: var(--accent); background: #2d2b28; }
 
 /* ============ BUTTONS & INPUTS ============ */
 .btn {
   background: var(--accent);
   color: #fff;
   border: none;
-  padding: 14px 24px;
+  padding: 15px 30px;
   border-radius: var(--radius);
   cursor: pointer;
   font-weight: 800;
-  transition: 0.2s;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-size: 1rem;
 }
-.btn:hover { background: var(--accent-hover); transform: translateY(-2px); }
-.btn-secondary { background: #403d39; padding: 10px 18px; font-size: 0.9rem; }
-.btn-secondary:hover { background: #55524d; }
+.btn-secondary { background: #403d39; padding: 10px 20px; font-size: 0.9rem; margin: 0 5px; }
 
 .login-panel {
   background: var(--bg-panel);
-  padding: 50px;
+  padding: 60px;
   border-radius: var(--radius);
   text-align: center;
-  max-width: 550px;
-  margin: 80px auto;
+  max-width: 600px;
+  margin: 100px auto;
   box-shadow: var(--shadow);
-  border-top: 5px solid var(--accent);
+  border-top: 6px solid var(--diamond);
 }
-.input-group { display: flex; gap: 12px; margin-top: 25px; }
+.input-group { display: flex; gap: 15px; margin-top: 30px; }
 .username-input {
   flex: 1;
   background: var(--bg-sidebar);
   border: 1px solid #444;
   color: #fff;
-  padding: 14px;
+  padding: 15px;
   border-radius: var(--radius);
-  font-size: 1rem;
+  font-size: 1.1rem;
 }
 
 /* ============ RESPONSIVE ============ */
 @media (max-width: 1100px) {
   .main-layout { grid-template-columns: 1fr; }
   .board-section { flex-direction: column; align-items: center; }
-  .eval-bar { width: 100%; height: 30px; }
-  .eval-fill { height: 100% !important; transition: width 0.7s; }
-  .sidebar { min-height: auto; }
+  .eval-bar { width: 100%; height: 35px; }
+  .eval-fill { height: 100% !important; transition: width 0.8s; }
 }

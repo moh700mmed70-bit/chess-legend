@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chess Legend v6.0 — الدقة المتناهية</title>
+  <title>Chess Legend — Diamond Review</title>
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/chess.js@0.10.3/chess.min.js"></script>
 </head>
@@ -11,33 +11,26 @@
 
 <div class="container">
   <header>
-    <h1>Chess Legend</h1>
-    <p class="subtitle">تحليل احترافي &bull; تدريب ذكي &bull; دقة Stockfish</p>
+    <h1>Chess Legend <span class="badge-diamond">DIAMOND</span></h1>
+    <p class="subtitle">مراجعة المباريات بالذكاء الاصطناعي &bull; Stockfish 16</p>
   </header>
 
   <!-- Login Section -->
   <section id="loginPanel" class="login-panel">
-    <h2>ابدأ رحلتك الاحترافية</h2>
+    <h2>ابدأ مراجعة مبارياتك باحترافية</h2>
     <div class="input-group">
       <input type="text" id="usernameInput" class="username-input" placeholder="اسم المستخدم على Chess.com" />
-      <button id="fetchBtn" class="btn">تحليل المباريات</button>
+      <button id="fetchBtn" class="btn">ابدأ المراجعة</button>
     </div>
     <div id="statusBar" class="hidden" style="margin-top: 15px; color: var(--accent);">
-      <span id="statusText">جاري التحميل...</span>
+      <span id="statusText">جاري جلب البيانات...</span>
     </div>
   </section>
 
   <!-- Main Dashboard -->
   <main id="mainDashboard" class="dashboard hidden">
-    <nav class="tabs-nav">
-      <button class="tab-btn active" data-tab="analysis">التحليل والمراجعة</button>
-      <button class="tab-btn" data-tab="openings">مدرب الافتتاحيات</button>
-      <button class="tab-btn" data-tab="puzzles">الألغاز التكتيكية</button>
-      <button class="tab-btn" data-tab="endgames">إتقان النهايات</button>
-    </nav>
-
     <div class="main-layout">
-      <!-- Left Side: Board & Eval -->
+      <!-- Board Section -->
       <div class="board-section">
         <div class="eval-bar">
           <div id="evalFill" class="eval-fill" style="height: 50%;"></div>
@@ -52,51 +45,34 @@
             <button class="btn btn-secondary" id="lastMove">&raquo;|</button>
             <button class="btn btn-secondary" id="flipBoard">&#8644;</button>
           </div>
-          <div id="feedbackArea" class="feedback-container"></div>
         </div>
       </div>
 
-      <!-- Right Side: Content Panels -->
+      <!-- Analysis Sidebar -->
       <div class="sidebar">
-        <!-- Analysis Panel (Only visible in Analysis Tab) -->
-        <div id="analysisPanel" class="tab-content-panel active">
-          <div class="panel">
-            <h3>المباريات الأخيرة</h3>
-            <div id="gameList" class="scroll-area"></div>
-          </div>
-          <div class="panel" style="margin-top: 15px;">
-            <h3>سجل النقلات والتحليل</h3>
-            <div id="moveHistory" class="scroll-area"></div>
-          </div>
+        <!-- Coach Explanation (Diamond Feature) -->
+        <div class="panel coach-panel">
+          <h3><span class="icon">💎</span> شرح المدرب</h3>
+          <div id="coachExplanation" class="coach-text">اختر نقلة لبدء التحليل العميق...</div>
         </div>
 
-        <!-- Training Panels (Visible in their respective tabs) -->
-        <div id="openingsPanel" class="tab-content-panel">
-          <div class="panel">
-            <h3>اختر افتتاحية للتدريب</h3>
-            <div id="openingsList" class="scroll-area"></div>
-          </div>
+        <!-- Game Selector -->
+        <div class="panel">
+          <h3>المباريات الأخيرة</h3>
+          <div id="gameList" class="scroll-area" style="max-height: 200px;"></div>
         </div>
 
-        <div id="puzzlesPanel" class="tab-content-panel">
-          <div class="panel">
-            <h3>الألغاز التكتيكية</h3>
-            <div id="puzzlesList" class="scroll-area"></div>
-          </div>
-        </div>
-
-        <div id="endgamesPanel" class="tab-content-panel">
-          <div class="panel">
-            <h3>مواقف النهايات</h3>
-            <div id="endgamesList" class="scroll-area"></div>
-          </div>
+        <!-- Move History -->
+        <div class="panel">
+          <h3>سجل النقلات</h3>
+          <div id="moveHistory" class="scroll-area" style="max-height: 250px;"></div>
         </div>
       </div>
     </div>
   </main>
 
   <footer style="text-align: center; margin-top: 40px; color: var(--text-dim); font-size: 0.8rem;">
-    &copy; 2026 Chess Legend &bull; تم التطوير بأعلى معايير الدقة
+    &copy; 2026 Chess Legend &bull; تجربة مراجعة ماسية متكاملة
   </footer>
 </div>
 
