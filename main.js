@@ -1,14 +1,25 @@
 /**
- * Chess Legend v6.0 - Precision Engine
+ * Chess Legend v7.0 - The Engineered Solution
+ * Comprehensive isolation, precision analysis, and interactive training.
  */
 
 'use strict';
 
 (function() {
+  // ============ CONFIGURATION ============
   const CONFIG = {
     STOCKFISH_PATH: 'stockfish.js',
     DEPTH: 16,
-    MAX_GAMES: 10
+    MAX_GAMES: 10,
+    CLASSIFICATION: {
+      BRILLIANT: 0.1, // If diff is tiny and score is very high
+      BEST: 0.2,      // Loss less than 0.2
+      EXCELLENT: 0.5, // Loss less than 0.5
+      GOOD: 0.8,      // Loss less than 0.8
+      INACCURACY: 1.5,// Loss more than 0.8
+      MISTAKE: 2.5,   // Loss more than 1.5
+      BLUNDER: 99.0   // Loss more than 2.5
+    }
   };
 
   const state = {
@@ -21,12 +32,13 @@
     isEngineReady: false,
     activeTab: 'analysis',
     boardFlipped: false,
-    // Training
-    trainingMode: null,
+    // Training State
+    trainingMode: null, // 'opening', 'puzzle', 'endgame'
     trainingData: null,
     trainingChess: new Chess(),
     draggedFrom: null,
-    bestMove: null
+    bestMove: null,
+    lastScore: 0
   };
 
   const elements = {
@@ -56,6 +68,7 @@
       btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
     
+    // Board Controls
     document.getElementById('prevMove').addEventListener('click', () => navigate(-1));
     document.getElementById('nextMove').addEventListener('click', () => navigate(1));
     document.getElementById('firstMove').addEventListener('click', () => navigate(-999));
@@ -68,6 +81,7 @@
     initEngine();
   }
 
+  // ============ ENGINE LOGIC ============
   function initEngine() {
     if (state.engine) state.engine.terminate();
     state.engine = new Worker(CONFIG.STOCKFISH_PATH + '?v=' + Date.now());
@@ -84,7 +98,7 @@
     if (msg.includes('score cp') || msg.includes('score mate')) {
       const score = parseScore(msg);
       updateEvalUI(score);
-      if (!state.trainingMode) updateMoveClassification(score);
+      if (!state.trainingMode) calculateClassification(score);
     }
     if (msg.startsWith('bestmove')) {
       state.bestMove = msg.split(' ')[1];
@@ -97,7 +111,7 @@
     return 'M' + Math.abs(mate);
   }
 
-  // ============ APP FLOW ============
+  // ============ APP CORE FLOW ============
   async function startApp() {
     const user = elements.usernameInput.value.trim();
     if (!user) return;
@@ -118,7 +132,7 @@
       if (state.games.length > 0) selectGame(0);
       populateTraining();
     } catch (e) {
-      toggleStatus(true, 'حدث خطأ. يرجى التأكد من اسم المستخدم.');
+      toggleStatus(true, 'حدث خطأ. تأكد من اسم المستخدم.');
     }
   }
 
@@ -138,7 +152,7 @@
     const moves = chess.history({ verbose: true });
     
     const temp = new Chess();
-    state.history = [{ fen: temp.fen(), move: 'Start', uci: '', score: 0, classification: 'book' }];
+    state.history = [{ fen: temp.fen(), move: 'البداية', uci: '', score: 0, classification: 'book' }];
     
     for (let m of moves) {
       temp.move(m);
@@ -160,9 +174,9 @@
 
   function renderGameList() {
     elements.gameList.innerHTML = state.games.map((g, i) => `
-      <div class="game-card ${state.currentGame === g ? 'active' : ''}" onclick="window.selectGame(${i})">
+      <div class="card ${state.currentGame === g ? 'active' : ''}" onclick="window.selectGame(${i})">
         <strong>${g.white.username} vs ${g.black.username}</strong>
-        <div style="font-size: 0.7rem; color: var(--text-dim)">${new Date(g.end_time * 1000).toLocaleDateString()}</div>
+        <div style="font-size: 0.75rem; color: var(--text-dim)">${new Date(g.end_time * 1000).toLocaleDateString()}</div>
       </div>
     `).join('');
   }
@@ -176,7 +190,7 @@
       html += `
         <div class="move-val ${active}" onclick="window.goTo(${i})">
           ${m.move}
-          <span class="badge badge-${m.classification}">${getIcon(m.classification)}</span>
+          <span class="badge badge-${m.classification}">${getBadgeIcon(m.classification)}</span>
         </div>
       `;
     }
@@ -184,8 +198,8 @@
     elements.moveHistory.innerHTML = html;
   }
 
-  function getIcon(cls) {
-    const icons = { brilliant: '!!', best: '★', blunder: '??', good: '✓', book: '📖' };
+  function getBadgeIcon(cls) {
+    const icons = { brilliant: '!!', best: '★', great: '!', good: '✓', inaccuracy: '?!', mistake: '?', blunder: '??', book: '📖' };
     return icons[cls] || '';
   }
 
@@ -210,14 +224,14 @@
     const rows = pos.split('/');
     elements.mainBoard.innerHTML = '';
     
-    let board = [];
+    let boardArr = [];
     for (let row of rows) {
       let r = [];
       for (let c of row) {
         if (isNaN(c)) r.push(c);
         else for (let i=0; i<parseInt(c); i++) r.push(null);
       }
-      board.push(r);
+      boardArr.push(r);
     }
 
     for (let i = 0; i < 8; i++) {
@@ -228,7 +242,7 @@
         square.className = `square ${(r+c)%2===0?'light':'dark'}`;
         square.dataset.pos = getSqName(r, c);
         
-        const piece = board[r][c];
+        const piece = boardArr[r][c];
         if (piece) {
           const img = document.createElement('img');
           img.src = getPieceImg(piece);
@@ -245,11 +259,12 @@
       }
     }
     
+    // Highlight last move in analysis
     if (!state.trainingMode && state.currentMoveIndex > 0) {
       const uci = state.history[state.currentMoveIndex].uci;
       if (uci) {
-        highlight(uci.substring(0,2));
-        highlight(uci.substring(2,4));
+        highlightSq(uci.substring(0,2));
+        highlightSq(uci.substring(2,4));
       }
     }
   }
@@ -266,6 +281,7 @@
       if (state.trainingMode) {
         handleTrainingMove(move);
       } else {
+        // Manual move in analysis
         state.history = state.history.slice(0, state.currentMoveIndex + 1);
         state.history.push({
           fen: chess.fen(),
@@ -282,7 +298,7 @@
     }
   }
 
-  function highlight(pos, cls = 'last-move') {
+  function highlightSq(pos, cls = 'last-move') {
     const sq = document.querySelector(`[data-pos="${pos}"]`);
     if (sq) sq.classList.add(cls);
   }
@@ -310,17 +326,17 @@
       ]
     };
 
-    elements.openingsList.innerHTML = data.openings.map((o, i) => renderCard(o, 'opening', i)).join('');
-    elements.puzzlesList.innerHTML = data.puzzles.map((p, i) => renderCard(p, 'puzzle', i)).join('');
-    elements.endgamesList.innerHTML = data.endgames.map((e, i) => renderCard(e, 'endgame', i)).join('');
+    elements.openingsList.innerHTML = data.openings.map((o, i) => renderTrainCard(o, 'opening', i)).join('');
+    elements.puzzlesList.innerHTML = data.puzzles.map((p, i) => renderTrainCard(p, 'puzzle', i)).join('');
+    elements.endgamesList.innerHTML = data.endgames.map((e, i) => renderTrainCard(e, 'endgame', i)).join('');
   }
 
-  function renderCard(item, type, index) {
+  function renderTrainCard(item, type, index) {
     return `
-      <div class="game-card">
+      <div class="card">
         <strong>${item.name}</strong>
-        <p style="font-size:0.8rem; color:var(--text-dim)">${item.desc}</p>
-        <button class="btn" style="width:100%; margin-top:10px;" onclick="window.startTrain('${type}', ${index})">ابدأ التدريب</button>
+        <p style="font-size:0.85rem; color:var(--text-dim); margin:5px 0;">${item.desc}</p>
+        <button class="btn" style="width:100%; padding:8px;" onclick="window.startTrain('${type}', ${index})">تدرب الآن</button>
       </div>
     `;
   }
@@ -338,24 +354,26 @@
     
     state.trainingData = pool[index];
     state.trainingChess = new Chess(state.trainingData.fen);
-    switchTab('analysis');
+    switchTab('analysis'); // Go back to board view
     renderBoard();
-    elements.feedbackArea.innerHTML = `<div class="msg-box">الهدف: ابحث عن النقلة الصحيحة في وضع ${state.trainingData.name}</div>`;
+    elements.feedbackArea.innerHTML = `
+      <div class="msg-box">الهدف: ابحث عن النقلة الصحيحة في وضع ${state.trainingData.name}</div>
+    `;
   };
 
   function handleTrainingMove(move) {
     const uci = move.from + move.to;
     const isCorrect = (uci === state.trainingData.target || move.san === state.trainingData.target);
     
-    renderBoard();
+    renderBoard(); // Update pieces first
     if (isCorrect) {
-      highlight(move.to, 'correct');
+      highlightSq(move.to, 'correct');
       elements.feedbackArea.innerHTML = `
         <div class="msg-box msg-success">أحسنت! هذه هي النقلة الصحيحة.</div>
         <button class="btn btn-secondary" style="width:100%" onclick="window.resetTraining()">إعادة المحاولة</button>
       `;
     } else {
-      highlight(move.to, 'wrong');
+      highlightSq(move.to, 'wrong');
       elements.feedbackArea.innerHTML = `
         <div class="msg-box msg-error">نقلة خاطئة. حاول مرة أخرى.</div>
         <button class="btn btn-secondary" style="width:100%" onclick="window.resetTraining()">إعادة المحاولة</button>
@@ -380,6 +398,10 @@
     elements.tabPanels.forEach(panel => {
       panel.classList.toggle('active', panel.id === tabId + 'Panel');
     });
+    // Reset board state if needed
+    if (tabId !== 'analysis') {
+      elements.feedbackArea.innerHTML = '';
+    }
   }
 
   function updateEvalUI(score) {
@@ -390,18 +412,20 @@
     elements.evalFill.style.height = `${h}%`;
   }
 
-  function updateMoveClassification(score) {
+  function calculateClassification(score) {
     if (state.currentMoveIndex === 0) return;
-    const prevScore = parseFloat(state.history[state.currentMoveIndex-1].score) || 0;
-    const currentScore = parseFloat(score) || 0;
-    const diff = Math.abs(currentScore - prevScore);
-    
+    const current = parseFloat(score) || 0;
+    const diff = Math.abs(current - state.lastScore);
+    state.lastScore = current;
+
     let cls = 'good';
-    if (diff < 0.2) cls = 'best';
-    else if (diff > 2.0) cls = 'blunder';
-    else if (diff < 0.1 && Math.abs(currentScore) > 2.0) cls = 'brilliant';
+    if (diff < CONFIG.CLASSIFICATION.BRILLIANT && Math.abs(current) > 2.0) cls = 'brilliant';
+    else if (diff < CONFIG.CLASSIFICATION.BEST) cls = 'best';
+    else if (diff < CONFIG.CLASSIFICATION.EXCELLENT) cls = 'great';
+    else if (diff > 2.5) cls = 'blunder';
+    else if (diff > 1.5) cls = 'mistake';
+    else if (diff > 0.8) cls = 'inaccuracy';
     
-    state.history[state.currentMoveIndex].score = score;
     state.history[state.currentMoveIndex].classification = cls;
     renderMoveHistory();
   }
