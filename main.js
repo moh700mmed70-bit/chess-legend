@@ -1,16 +1,17 @@
 /**
- * Chess Legend - Comprehensive Reconstruction
- * Version: 4.0
+ * Chess Legend - Engineered Pro Platform
+ * Version: 5.0 (Final Reconstruction)
  */
 
 'use strict';
 
 (function() {
-  // ============ CONFIG & STATE ============
+  // ============ CONSTANTS & CONFIG ============
   const CONFIG = {
     STOCKFISH_PATH: 'stockfish.js',
     DEPTH: 16,
-    MAX_GAMES: 10
+    MAX_GAMES: 10,
+    CHESS_API: 'https://api.chess.com/pub/player/'
   };
 
   const state = {
@@ -18,15 +19,16 @@
     games: [],
     currentGame: null,
     currentMoveIndex: 0,
-    history: [], // [{fen, move, score, classification, uci}]
+    history: [], // [{fen, move, uci, score, classification}]
     engine: null,
     isEngineReady: false,
     activeTab: 'analysis',
     boardFlipped: false,
-    // Training State
+    // Training Features
     trainingMode: null, // 'opening', 'puzzle', 'endgame'
     trainingData: null,
-    currentTrainingChess: new Chess()
+    trainingChess: new Chess(),
+    draggedFrom: null
   };
 
   const elements = {
@@ -43,8 +45,10 @@
     tabBtns: document.querySelectorAll('.tab-btn'),
     tabPanes: document.querySelectorAll('.tab-pane'),
     openingsGrid: document.getElementById('openingsGrid'),
+    puzzlesGrid: document.getElementById('puzzlesGrid'),
     endgamesGrid: document.getElementById('endgamesGrid'),
-    puzzlesGrid: document.getElementById('puzzlesGrid')
+    statusBar: document.getElementById('statusBar'),
+    statusText: document.getElementById('statusText')
   };
 
   // ============ INITIALIZATION ============
@@ -59,17 +63,17 @@
   }
 
   function setupControls() {
-    document.getElementById('prevMove').addEventListener('click', () => navigate(-1));
-    document.getElementById('nextMove').addEventListener('click', () => navigate(1));
-    document.getElementById('firstMove').addEventListener('click', () => navigate(-999));
-    document.getElementById('lastMove').addEventListener('click', () => navigate(999));
+    document.getElementById('prevMove').addEventListener('click', () => navigateHistory(-1));
+    document.getElementById('nextMove').addEventListener('click', () => navigateHistory(1));
+    document.getElementById('firstMove').addEventListener('click', () => navigateHistory(-999));
+    document.getElementById('lastMove').addEventListener('click', () => navigateHistory(999));
     document.getElementById('flipBoard').addEventListener('click', () => {
       state.boardFlipped = !state.boardFlipped;
       renderBoard();
     });
   }
 
-  // ============ ENGINE LOGIC ============
+  // ============ ENGINE LOGIC (STOCKFISH) ============
   function initEngine() {
     if (state.engine) state.engine.terminate();
     state.engine = new Worker(CONFIG.STOCKFISH_PATH + '?v=' + Date.now());
@@ -77,18 +81,18 @@
       const msg = e.data;
       if (msg === 'uciok') state.engine.postMessage('isready');
       if (msg === 'readyok') state.isEngineReady = true;
-      handleEngineMsg(msg);
+      handleEngineMessage(msg);
     };
     state.engine.postMessage('uci');
   }
 
-  function handleEngineMsg(msg) {
+  function handleEngineMessage(msg) {
     if (msg.includes('score cp') || msg.includes('score mate')) {
       const score = parseScore(msg);
       updateEvalUI(score);
     }
     if (msg.startsWith('bestmove')) {
-      state.bestMove = msg.split(' ')[1];
+      state.currentBest = msg.split(' ')[1];
     }
   }
 
@@ -98,49 +102,47 @@
     return 'M' + Math.abs(mate);
   }
 
-  // ============ CORE APP FLOW ============
+  // ============ APP FLOW ============
   async function startApp() {
     const user = elements.usernameInput.value.trim();
     if (!user) return;
     state.username = user;
     
-    toggleStatus(true, 'جاري جلب بياناتك من Chess.com...');
+    updateStatus(true, 'جاري جلب مبارياتك من Chess.com...');
     try {
-      const res = await fetch(`https://api.chess.com/pub/player/${user}/games/archives`);
+      const res = await fetch(`${CONFIG.CHESS_API}${user}/games/archives`);
       const archives = (await res.json()).archives;
       const gamesRes = await fetch(archives[archives.length - 1]);
       state.games = (await gamesRes.json()).games.slice(-CONFIG.MAX_GAMES).reverse();
       
       elements.loginPanel.classList.add('hidden');
       elements.mainDashboard.classList.remove('hidden');
-      toggleStatus(false);
+      updateStatus(false);
       
       renderGameList();
       if (state.games.length > 0) selectGame(0);
-      populateFeatures();
+      populateTraining();
     } catch (e) {
-      toggleStatus(true, 'حدث خطأ. تأكد من اسم المستخدم.');
+      updateStatus(true, 'حدث خطأ. يرجى التأكد من اسم المستخدم.');
     }
   }
 
-  function toggleStatus(show, text = '') {
-    const bar = document.getElementById('statusBar');
-    const txt = document.getElementById('statusText');
-    bar.classList.toggle('hidden', !show);
-    txt.textContent = text;
+  function updateStatus(show, text = '') {
+    elements.statusBar.classList.toggle('hidden', !show);
+    elements.statusText.textContent = text;
   }
 
   // ============ ANALYSIS SYSTEM ============
   window.selectGame = (index) => {
     state.currentGame = state.games[index];
-    state.trainingMode = null; // إيقاف وضع التدريب عند العودة للتحليل
+    state.trainingMode = null;
     
     const chess = new Chess();
     chess.load_pgn(state.currentGame.pgn);
     const moves = chess.history({ verbose: true });
     
     const temp = new Chess();
-    state.history = [{ fen: temp.fen(), move: 'Start', uci: '', score: 0, classification: 'book' }];
+    state.history = [{ fen: temp.fen(), move: 'البداية', uci: '', score: 0, classification: 'book' }];
     
     for (let m of moves) {
       temp.move(m);
@@ -149,7 +151,7 @@
         move: m.san,
         uci: m.from + m.to + (m.promotion || ''),
         score: 0,
-        classification: 'good'
+        classification: 'good' // سيتم تحسينه لاحقاً
       });
     }
     
@@ -157,14 +159,14 @@
     renderGameList();
     renderMoveHistory();
     renderBoard();
-    analyze();
+    runAnalysis();
   };
 
   function renderGameList() {
     elements.gameList.innerHTML = state.games.map((g, i) => `
       <div class="game-card ${state.currentGame === g ? 'active' : ''}" onclick="window.selectGame(${i})">
         <strong>${g.white.username} vs ${g.black.username}</strong>
-        <div style="font-size: 0.7rem; color: var(--text-dim)">${new Date(g.end_time * 1000).toLocaleDateString()}</div>
+        <div style="font-size: 0.75rem; color: var(--text-dim)">${new Date(g.end_time * 1000).toLocaleDateString()}</div>
       </div>
     `).join('');
   }
@@ -172,15 +174,13 @@
   function renderMoveHistory() {
     let html = '<div class="move-list">';
     for (let i = 1; i < state.history.length; i++) {
-      if (i % 2 !== 0) html += `<div class="move-num">${Math.floor(i/2) + 1}.</div>`;
+      if (i % 2 !== 0) html += `<div class="move-num">${Math.floor(i/2) + 1}</div>`;
       const m = state.history[i];
       const active = state.currentMoveIndex === i ? 'active' : '';
       html += `
-        <div class="move-val ${active}" onclick="window.goTo(${i})">
+        <div class="move-val ${active}" onclick="window.goToMove(${i})">
           ${m.move}
-          <span class="move-badge badge-${m.classification}" style="position:relative; top:0; right:0; width:16px; height:16px; font-size:10px;">
-            ${getIcon(m.classification)}
-          </span>
+          <span class="badge badge-${m.classification}">${getBadgeIcon(m.classification)}</span>
         </div>
       `;
     }
@@ -188,28 +188,28 @@
     elements.moveHistory.innerHTML = html;
   }
 
-  function getIcon(cls) {
+  function getBadgeIcon(cls) {
     const icons = { brilliant: '!!', best: '★', great: '!', good: '✓', inaccuracy: '?!', mistake: '?', blunder: '??', book: '📖' };
     return icons[cls] || '';
   }
 
-  window.goTo = (i) => {
-    state.currentMoveIndex = i;
+  window.goToMove = (index) => {
+    state.currentMoveIndex = index;
     renderBoard();
     renderMoveHistory();
-    analyze();
+    runAnalysis();
   };
 
-  function navigate(dir) {
+  function navigateHistory(dir) {
     let n = state.currentMoveIndex + dir;
     if (n < 0) n = 0;
     if (n >= state.history.length) n = state.history.length - 1;
-    window.goTo(n);
+    window.goToMove(n);
   }
 
-  // ============ BOARD RENDERING (FIXED GRID) ============
+  // ============ THE ROCK SOLID BOARD ============
   function renderBoard() {
-    const fen = state.trainingMode ? state.currentTrainingChess.fen() : state.history[state.currentMoveIndex].fen;
+    const fen = state.trainingMode ? state.trainingChess.fen() : state.history[state.currentMoveIndex].fen;
     const pos = fen.split(' ')[0];
     const rows = pos.split('/');
     elements.mainBoard.innerHTML = '';
@@ -235,7 +235,7 @@
         const piece = board[r][c];
         if (piece) {
           const img = document.createElement('img');
-          img.src = getPieceUrl(piece);
+          img.src = getPieceImg(piece);
           img.className = 'piece';
           img.draggable = true;
           img.dataset.from = square.dataset.pos;
@@ -249,12 +249,12 @@
       }
     }
     
-    // تظليل آخر نقلة
+    // Highlight last move
     if (!state.trainingMode && state.currentMoveIndex > 0) {
       const uci = state.history[state.currentMoveIndex].uci;
       if (uci) {
-        highlight(uci.substring(0,2));
-        highlight(uci.substring(2,4));
+        highlightSquare(uci.substring(0,2));
+        highlightSquare(uci.substring(2,4));
       }
     }
   }
@@ -264,14 +264,14 @@
     const from = state.draggedFrom;
     if (!from || from === to) return;
     
-    const chess = state.trainingMode ? state.currentTrainingChess : new Chess(state.history[state.currentMoveIndex].fen);
+    const chess = state.trainingMode ? state.trainingChess : new Chess(state.history[state.currentMoveIndex].fen);
     const move = chess.move({ from, to, promotion: 'q' });
     
     if (move) {
       if (state.trainingMode) {
         handleTrainingMove(move);
       } else {
-        // إضافة نقلة يدوية للتحليل
+        // إضافة نقلة يدوية
         state.history = state.history.slice(0, state.currentMoveIndex + 1);
         state.history.push({
           fen: chess.fen(),
@@ -283,55 +283,55 @@
         state.currentMoveIndex++;
         renderBoard();
         renderMoveHistory();
-        analyze();
+        runAnalysis();
       }
     }
   }
 
-  function highlight(pos) {
+  function highlightSquare(pos) {
     const sq = document.querySelector(`[data-pos="${pos}"]`);
     if (sq) sq.classList.add('last-move');
   }
 
   function getSqName(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
-  function getPieceUrl(p) {
+  function getPieceImg(p) {
     const color = p === p.toUpperCase() ? 'w' : 'b';
     const type = p.toLowerCase();
     const map = {p:'P', r:'R', n:'N', b:'B', q:'Q', k:'K'};
     return `https://lichess1.org/assets/piece/cburnett/${color}${map[type]}.svg`;
   }
 
-  // ============ TRAINING FEATURES ============
-  function populateFeatures() {
+  // ============ TRAINING SYSTEM ============
+  function populateTraining() {
     const openings = [
       { name: 'Ruy Lopez', fen: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3', target: 'a6', desc: 'دفاع مورفي، النقلة الأكثر كلاسيكية.' },
       { name: 'Sicilian Defense', fen: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2', target: 'Nf3', desc: 'تطوير الحصان للسيطرة على الوسط.' }
     ];
     elements.openingsGrid.innerHTML = openings.map((o, i) => `
-      <div class="feature-card">
-        <h3>${o.name}</h3>
+      <div class="card">
+        <h4>${o.name}</h4>
         <p>${o.desc}</p>
         <button class="btn" onclick="window.startTrain('opening', ${i})">تدرب الآن</button>
       </div>
     `).join('');
 
     const puzzles = [
-      { name: 'لغز تكتيكي', fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4', target: 'Qxf7#', desc: 'ابحث عن كش مات في نقلة واحدة.' }
+      { name: 'كش مات في نقلة', fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4', target: 'Qxf7#', desc: 'ابحث عن الحركة القاتلة لإنهاء المباراة.' }
     ];
     elements.puzzlesGrid.innerHTML = puzzles.map((p, i) => `
-      <div class="feature-card">
-        <h3>${p.name}</h3>
+      <div class="card">
+        <h4>${p.name}</h4>
         <p>${p.desc}</p>
         <button class="btn" onclick="window.startTrain('puzzle', ${i})">حل اللغز</button>
       </div>
     `).join('');
 
     const endgames = [
-      { name: 'نهاية ملك ورخ', fen: '8/8/8/8/8/2k5/2r5/4K3 w - - 0 1', target: 'Kf1', desc: 'حافظ على التعادل ضد الملك والرخ.' }
+      { name: 'نهاية ملك ورخ', fen: '8/8/8/8/8/2k5/2r5/4K3 w - - 0 1', target: 'Kf1', desc: 'تعلم كيف تحافظ على التعادل في وضع صعب.' }
     ];
     elements.endgamesGrid.innerHTML = endgames.map((e, i) => `
-      <div class="feature-card">
-        <h3>${e.name}</h3>
+      <div class="card">
+        <h4>${e.name}</h4>
         <p>${e.desc}</p>
         <button class="btn" onclick="window.startTrain('endgame', ${i})">ابدأ التدريب</button>
       </div>
@@ -344,30 +344,55 @@
       { name: 'Ruy Lopez', fen: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3', target: 'a6' },
       { name: 'Sicilian Defense', fen: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2', target: 'Nf3' }
     ] : type === 'puzzle' ? [
-      { name: 'لغز تكتيكي', fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4', target: 'Qxf7#' }
+      { name: 'كش مات في نقلة', fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4', target: 'Qxf7#' }
     ] : [
       { name: 'نهاية ملك ورخ', fen: '8/8/8/8/8/2k5/2r5/4K3 w - - 0 1', target: 'Kf1' }
     ];
     
     state.trainingData = pool[index];
-    state.currentTrainingChess = new Chess(state.trainingData.fen);
+    state.trainingChess = new Chess(state.trainingData.fen);
     switchTab('analysis');
     renderBoard();
-    elements.engineFeedback.innerHTML = `<div class="feedback-box">الهدف: ابحث عن النقلة الصحيحة في وضع ${state.trainingData.name}</div>`;
+    elements.engineFeedback.innerHTML = `
+      <div class="feedback-msg">الهدف: ابحث عن النقلة الصحيحة في وضع ${state.trainingData.name}</div>
+    `;
   };
 
   function handleTrainingMove(move) {
     const uci = move.from + move.to;
-    if (uci === state.trainingData.target || move.san === state.trainingData.target) {
-      elements.engineFeedback.innerHTML = `<div class="feedback-box feedback-success">ممتاز! هذه هي النقلة الصحيحة.</div>`;
+    const isCorrect = (uci === state.trainingData.target || move.san === state.trainingData.target);
+    
+    const squares = document.querySelectorAll('.square');
+    squares.forEach(s => s.classList.remove('correct', 'wrong'));
+    
+    const toSq = document.querySelector(`[data-pos="${move.to}"]`);
+    
+    if (isCorrect) {
+      toSq.classList.add('correct');
+      elements.engineFeedback.innerHTML = `
+        <div class="feedback-msg msg-success">أحسنت! هذه هي النقلة الصحيحة.</div>
+        <button class="btn btn-secondary" style="margin-top:10px" onclick="window.resetTraining()">إعادة المحاولة</button>
+      `;
     } else {
-      elements.engineFeedback.innerHTML = `<div class="feedback-box feedback-error">نقلة خاطئة. حاول مرة أخرى.</div>`;
+      toSq.classList.add('wrong');
+      elements.engineFeedback.innerHTML = `
+        <div class="feedback-msg msg-error">نقلة خاطئة. حاول مرة أخرى.</div>
+        <button class="btn btn-secondary" style="margin-top:10px" onclick="window.resetTraining()">إعادة المحاولة</button>
+      `;
       setTimeout(() => {
-        state.currentTrainingChess.undo();
+        state.trainingChess.undo();
         renderBoard();
       }, 1000);
     }
   }
+
+  window.resetTraining = () => {
+    state.trainingChess = new Chess(state.trainingData.fen);
+    renderBoard();
+    elements.engineFeedback.innerHTML = `
+      <div class="feedback-msg">الهدف: ابحث عن النقلة الصحيحة في وضع ${state.trainingData.name}</div>
+    `;
+  };
 
   // ============ UTILS ============
   function switchTab(tabId) {
@@ -384,7 +409,7 @@
     elements.evalFill.style.height = `${h}%`;
   }
 
-  function analyze() {
+  function runAnalysis() {
     if (!state.isEngineReady || state.trainingMode) return;
     const fen = state.history[state.currentMoveIndex].fen;
     state.engine.postMessage(`position fen ${fen}`);

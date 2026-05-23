@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chess Legend v4.0 — المنصة المتكاملة</title>
+  <title>Chess Legend v5.0 — الاحتراف الحقيقي</title>
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/chess.js@0.10.3/chess.min.js"></script>
 </head>
@@ -12,35 +12,36 @@
 <div class="container">
   <header>
     <h1>Chess Legend</h1>
-    <p class="subtitle">التحليل الذكي &bull; التدريب التفاعلي</p>
+    <p class="subtitle">منصة التحليل والتدريب الذكية &bull; Stockfish 16</p>
   </header>
 
-  <!-- Login Section -->
+  <!-- Login Panel -->
   <section class="login-panel" id="loginPanel">
-    <h2>أدخل حسابك لبدء التجربة</h2>
+    <h2>أدخل حسابك لبدء التحليل الاحترافي</h2>
     <div class="input-group">
       <input type="text" class="username-input" id="usernameInput" placeholder="اسم المستخدم على Chess.com" />
-      <button class="btn" id="fetchBtn">ابدأ الآن</button>
+      <button class="btn" id="fetchBtn">تحليل المباريات</button>
     </div>
-    <div id="statusBar" class="hidden" style="margin-top: 15px; color: var(--accent);">
-      <span id="statusText">جاري التحميل...</span>
+    <div id="statusBar" class="hidden" style="margin-top: 15px;">
+      <span class="spinner"></span>
+      <span id="statusText" style="color: var(--accent); font-weight: bold;">جاري التحميل...</span>
     </div>
   </section>
 
-  <!-- Dashboard Section -->
+  <!-- Main Dashboard -->
   <main class="dashboard hidden" id="mainDashboard">
-    <nav class="tabs">
-      <button class="tab-btn active" data-tab="analysis">التحليل والمراجعة</button>
+    <nav class="tabs-nav">
+      <button class="tab-btn active" data-tab="analysis">تحليل المباريات</button>
       <button class="tab-btn" data-tab="openings">مدرب الافتتاحيات</button>
       <button class="tab-btn" data-tab="puzzles">الألغاز التكتيكية</button>
       <button class="tab-btn" data-tab="endgames">إتقان النهايات</button>
     </nav>
 
     <div class="tab-content">
-      <!-- Analysis Tab -->
+      <!-- Section: Analysis -->
       <section id="analysisTab" class="tab-pane active">
-        <div class="analysis-layout">
-          <div class="board-wrapper">
+        <div class="main-layout">
+          <div class="board-section">
             <div class="eval-bar">
               <div class="eval-fill" id="evalFill" style="height: 50%;"></div>
               <div class="eval-text" id="evalText">0.0</div>
@@ -48,11 +49,11 @@
             <div class="board-container">
               <div class="board" id="mainBoard"></div>
               <div class="board-controls" style="display: flex; justify-content: center; gap: 10px; margin-top: 15px;">
-                <button class="btn" id="firstMove">|&laquo;</button>
-                <button class="btn" id="prevMove">&laquo;</button>
-                <button class="btn" id="nextMove">&raquo;</button>
-                <button class="btn" id="lastMove">&raquo;|</button>
-                <button class="btn" id="flipBoard">&#8644;</button>
+                <button class="btn btn-secondary" id="firstMove">|&laquo;</button>
+                <button class="btn btn-secondary" id="prevMove">&laquo;</button>
+                <button class="btn btn-secondary" id="nextMove">&raquo;</button>
+                <button class="btn btn-secondary" id="lastMove">&raquo;|</button>
+                <button class="btn btn-secondary" id="flipBoard">&#8644;</button>
               </div>
               <div id="engineFeedback"></div>
             </div>
@@ -60,36 +61,36 @@
           
           <div class="sidebar">
             <div class="panel" style="flex: 1;">
-              <h3>المباريات الأخيرة</h3>
+              <h3>قائمة المباريات</h3>
               <div class="scroll-area" id="gameList"></div>
             </div>
             <div class="panel" style="flex: 2;">
-              <h3>سجل النقلات والتحليل</h3>
+              <h3>تحليل النقلات</h3>
               <div class="scroll-area" id="moveHistory"></div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- Openings Tab -->
+      <!-- Section: Openings -->
       <section id="openingsTab" class="tab-pane">
         <div class="feature-grid" id="openingsGrid"></div>
       </section>
 
-      <!-- Puzzles Tab -->
+      <!-- Section: Puzzles -->
       <section id="puzzlesTab" class="tab-pane">
         <div class="feature-grid" id="puzzlesGrid"></div>
       </section>
 
-      <!-- Endgames Tab -->
+      <!-- Section: Endgames -->
       <section id="endgamesTab" class="tab-pane">
         <div class="feature-grid" id="endgamesGrid"></div>
       </section>
     </div>
   </main>
 
-  <footer style="text-align: center; margin-top: 50px; color: var(--text-dim); font-size: 0.85rem;">
-    &copy; 2026 Chess Legend &bull; تم التطوير بأعلى معايير الدقة
+  <footer style="text-align: center; margin-top: 50px; color: var(--text-dim); font-size: 0.8rem;">
+    &copy; 2026 Chess Legend &bull; منصة التحليل والتدريب الاحترافية
   </footer>
 </div>
 
