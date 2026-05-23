@@ -1,17 +1,14 @@
 /**
- * Chess Legend - Engineered Pro Platform
- * Version: 5.0 (Final Reconstruction)
+ * Chess Legend v6.0 - Precision Engine
  */
 
 'use strict';
 
 (function() {
-  // ============ CONSTANTS & CONFIG ============
   const CONFIG = {
     STOCKFISH_PATH: 'stockfish.js',
     DEPTH: 16,
-    MAX_GAMES: 10,
-    CHESS_API: 'https://api.chess.com/pub/player/'
+    MAX_GAMES: 10
   };
 
   const state = {
@@ -19,16 +16,17 @@
     games: [],
     currentGame: null,
     currentMoveIndex: 0,
-    history: [], // [{fen, move, uci, score, classification}]
+    history: [], // {fen, move, uci, score, classification}
     engine: null,
     isEngineReady: false,
     activeTab: 'analysis',
     boardFlipped: false,
-    // Training Features
-    trainingMode: null, // 'opening', 'puzzle', 'endgame'
+    // Training
+    trainingMode: null,
     trainingData: null,
     trainingChess: new Chess(),
-    draggedFrom: null
+    draggedFrom: null,
+    bestMove: null
   };
 
   const elements = {
@@ -37,16 +35,16 @@
     moveHistory: document.getElementById('moveHistory'),
     evalFill: document.getElementById('evalFill'),
     evalText: document.getElementById('evalText'),
-    engineFeedback: document.getElementById('engineFeedback'),
-    usernameInput: document.getElementById('usernameInput'),
-    fetchBtn: document.getElementById('fetchBtn'),
+    feedbackArea: document.getElementById('feedbackArea'),
     loginPanel: document.getElementById('loginPanel'),
     mainDashboard: document.getElementById('mainDashboard'),
     tabBtns: document.querySelectorAll('.tab-btn'),
-    tabPanes: document.querySelectorAll('.tab-pane'),
-    openingsGrid: document.getElementById('openingsGrid'),
-    puzzlesGrid: document.getElementById('puzzlesGrid'),
-    endgamesGrid: document.getElementById('endgamesGrid'),
+    tabPanels: document.querySelectorAll('.tab-content-panel'),
+    openingsList: document.getElementById('openingsList'),
+    puzzlesList: document.getElementById('puzzlesList'),
+    endgamesList: document.getElementById('endgamesList'),
+    usernameInput: document.getElementById('usernameInput'),
+    fetchBtn: document.getElementById('fetchBtn'),
     statusBar: document.getElementById('statusBar'),
     statusText: document.getElementById('statusText')
   };
@@ -58,22 +56,18 @@
       btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
     
-    setupControls();
-    initEngine();
-  }
-
-  function setupControls() {
-    document.getElementById('prevMove').addEventListener('click', () => navigateHistory(-1));
-    document.getElementById('nextMove').addEventListener('click', () => navigateHistory(1));
-    document.getElementById('firstMove').addEventListener('click', () => navigateHistory(-999));
-    document.getElementById('lastMove').addEventListener('click', () => navigateHistory(999));
+    document.getElementById('prevMove').addEventListener('click', () => navigate(-1));
+    document.getElementById('nextMove').addEventListener('click', () => navigate(1));
+    document.getElementById('firstMove').addEventListener('click', () => navigate(-999));
+    document.getElementById('lastMove').addEventListener('click', () => navigate(999));
     document.getElementById('flipBoard').addEventListener('click', () => {
       state.boardFlipped = !state.boardFlipped;
       renderBoard();
     });
+
+    initEngine();
   }
 
-  // ============ ENGINE LOGIC (STOCKFISH) ============
   function initEngine() {
     if (state.engine) state.engine.terminate();
     state.engine = new Worker(CONFIG.STOCKFISH_PATH + '?v=' + Date.now());
@@ -81,18 +75,19 @@
       const msg = e.data;
       if (msg === 'uciok') state.engine.postMessage('isready');
       if (msg === 'readyok') state.isEngineReady = true;
-      handleEngineMessage(msg);
+      handleEngineMsg(msg);
     };
     state.engine.postMessage('uci');
   }
 
-  function handleEngineMessage(msg) {
+  function handleEngineMsg(msg) {
     if (msg.includes('score cp') || msg.includes('score mate')) {
       const score = parseScore(msg);
       updateEvalUI(score);
+      if (!state.trainingMode) updateMoveClassification(score);
     }
     if (msg.startsWith('bestmove')) {
-      state.currentBest = msg.split(' ')[1];
+      state.bestMove = msg.split(' ')[1];
     }
   }
 
@@ -108,26 +103,26 @@
     if (!user) return;
     state.username = user;
     
-    updateStatus(true, 'جاري جلب مبارياتك من Chess.com...');
+    toggleStatus(true, 'جاري جلب بياناتك من Chess.com...');
     try {
-      const res = await fetch(`${CONFIG.CHESS_API}${user}/games/archives`);
+      const res = await fetch(`https://api.chess.com/pub/player/${user}/games/archives`);
       const archives = (await res.json()).archives;
       const gamesRes = await fetch(archives[archives.length - 1]);
       state.games = (await gamesRes.json()).games.slice(-CONFIG.MAX_GAMES).reverse();
       
       elements.loginPanel.classList.add('hidden');
       elements.mainDashboard.classList.remove('hidden');
-      updateStatus(false);
+      toggleStatus(false);
       
       renderGameList();
       if (state.games.length > 0) selectGame(0);
       populateTraining();
     } catch (e) {
-      updateStatus(true, 'حدث خطأ. يرجى التأكد من اسم المستخدم.');
+      toggleStatus(true, 'حدث خطأ. يرجى التأكد من اسم المستخدم.');
     }
   }
 
-  function updateStatus(show, text = '') {
+  function toggleStatus(show, text = '') {
     elements.statusBar.classList.toggle('hidden', !show);
     elements.statusText.textContent = text;
   }
@@ -136,13 +131,14 @@
   window.selectGame = (index) => {
     state.currentGame = state.games[index];
     state.trainingMode = null;
+    elements.feedbackArea.innerHTML = '';
     
     const chess = new Chess();
     chess.load_pgn(state.currentGame.pgn);
     const moves = chess.history({ verbose: true });
     
     const temp = new Chess();
-    state.history = [{ fen: temp.fen(), move: 'البداية', uci: '', score: 0, classification: 'book' }];
+    state.history = [{ fen: temp.fen(), move: 'Start', uci: '', score: 0, classification: 'book' }];
     
     for (let m of moves) {
       temp.move(m);
@@ -151,7 +147,7 @@
         move: m.san,
         uci: m.from + m.to + (m.promotion || ''),
         score: 0,
-        classification: 'good' // سيتم تحسينه لاحقاً
+        classification: 'good'
       });
     }
     
@@ -159,14 +155,14 @@
     renderGameList();
     renderMoveHistory();
     renderBoard();
-    runAnalysis();
+    analyze();
   };
 
   function renderGameList() {
     elements.gameList.innerHTML = state.games.map((g, i) => `
       <div class="game-card ${state.currentGame === g ? 'active' : ''}" onclick="window.selectGame(${i})">
         <strong>${g.white.username} vs ${g.black.username}</strong>
-        <div style="font-size: 0.75rem; color: var(--text-dim)">${new Date(g.end_time * 1000).toLocaleDateString()}</div>
+        <div style="font-size: 0.7rem; color: var(--text-dim)">${new Date(g.end_time * 1000).toLocaleDateString()}</div>
       </div>
     `).join('');
   }
@@ -178,9 +174,9 @@
       const m = state.history[i];
       const active = state.currentMoveIndex === i ? 'active' : '';
       html += `
-        <div class="move-val ${active}" onclick="window.goToMove(${i})">
+        <div class="move-val ${active}" onclick="window.goTo(${i})">
           ${m.move}
-          <span class="badge badge-${m.classification}">${getBadgeIcon(m.classification)}</span>
+          <span class="badge badge-${m.classification}">${getIcon(m.classification)}</span>
         </div>
       `;
     }
@@ -188,23 +184,23 @@
     elements.moveHistory.innerHTML = html;
   }
 
-  function getBadgeIcon(cls) {
-    const icons = { brilliant: '!!', best: '★', great: '!', good: '✓', inaccuracy: '?!', mistake: '?', blunder: '??', book: '📖' };
+  function getIcon(cls) {
+    const icons = { brilliant: '!!', best: '★', blunder: '??', good: '✓', book: '📖' };
     return icons[cls] || '';
   }
 
-  window.goToMove = (index) => {
-    state.currentMoveIndex = index;
+  window.goTo = (i) => {
+    state.currentMoveIndex = i;
     renderBoard();
     renderMoveHistory();
-    runAnalysis();
+    analyze();
   };
 
-  function navigateHistory(dir) {
+  function navigate(dir) {
     let n = state.currentMoveIndex + dir;
     if (n < 0) n = 0;
     if (n >= state.history.length) n = state.history.length - 1;
-    window.goToMove(n);
+    window.goTo(n);
   }
 
   // ============ THE ROCK SOLID BOARD ============
@@ -249,12 +245,11 @@
       }
     }
     
-    // Highlight last move
     if (!state.trainingMode && state.currentMoveIndex > 0) {
       const uci = state.history[state.currentMoveIndex].uci;
       if (uci) {
-        highlightSquare(uci.substring(0,2));
-        highlightSquare(uci.substring(2,4));
+        highlight(uci.substring(0,2));
+        highlight(uci.substring(2,4));
       }
     }
   }
@@ -271,7 +266,6 @@
       if (state.trainingMode) {
         handleTrainingMove(move);
       } else {
-        // إضافة نقلة يدوية
         state.history = state.history.slice(0, state.currentMoveIndex + 1);
         state.history.push({
           fen: chess.fen(),
@@ -283,14 +277,14 @@
         state.currentMoveIndex++;
         renderBoard();
         renderMoveHistory();
-        runAnalysis();
+        analyze();
       }
     }
   }
 
-  function highlightSquare(pos) {
+  function highlight(pos, cls = 'last-move') {
     const sq = document.querySelector(`[data-pos="${pos}"]`);
-    if (sq) sq.classList.add('last-move');
+    if (sq) sq.classList.add(cls);
   }
 
   function getSqName(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
@@ -303,46 +297,39 @@
 
   // ============ TRAINING SYSTEM ============
   function populateTraining() {
-    const openings = [
-      { name: 'Ruy Lopez', fen: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3', target: 'a6', desc: 'دفاع مورفي، النقلة الأكثر كلاسيكية.' },
-      { name: 'Sicilian Defense', fen: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2', target: 'Nf3', desc: 'تطوير الحصان للسيطرة على الوسط.' }
-    ];
-    elements.openingsGrid.innerHTML = openings.map((o, i) => `
-      <div class="card">
-        <h4>${o.name}</h4>
-        <p>${o.desc}</p>
-        <button class="btn" onclick="window.startTrain('opening', ${i})">تدرب الآن</button>
-      </div>
-    `).join('');
+    const data = {
+      openings: [
+        { name: 'Ruy Lopez', fen: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3', target: 'a6', desc: 'دفاع مورفي الكلاسيكي.' },
+        { name: 'Sicilian', fen: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2', target: 'Nf3', desc: 'تطوير الحصان للسيطرة.' }
+      ],
+      puzzles: [
+        { name: 'كش مات في نقلة', fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4', target: 'Qxf7#', desc: 'أنهِ المباراة فوراً.' }
+      ],
+      endgames: [
+        { name: 'نهاية ملك ورخ', fen: '8/8/8/8/8/2k5/2r5/4K3 w - - 0 1', target: 'Kf1', desc: 'حافظ على التعادل.' }
+      ]
+    };
 
-    const puzzles = [
-      { name: 'كش مات في نقلة', fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4', target: 'Qxf7#', desc: 'ابحث عن الحركة القاتلة لإنهاء المباراة.' }
-    ];
-    elements.puzzlesGrid.innerHTML = puzzles.map((p, i) => `
-      <div class="card">
-        <h4>${p.name}</h4>
-        <p>${p.desc}</p>
-        <button class="btn" onclick="window.startTrain('puzzle', ${i})">حل اللغز</button>
-      </div>
-    `).join('');
+    elements.openingsList.innerHTML = data.openings.map((o, i) => renderCard(o, 'opening', i)).join('');
+    elements.puzzlesList.innerHTML = data.puzzles.map((p, i) => renderCard(p, 'puzzle', i)).join('');
+    elements.endgamesList.innerHTML = data.endgames.map((e, i) => renderCard(e, 'endgame', i)).join('');
+  }
 
-    const endgames = [
-      { name: 'نهاية ملك ورخ', fen: '8/8/8/8/8/2k5/2r5/4K3 w - - 0 1', target: 'Kf1', desc: 'تعلم كيف تحافظ على التعادل في وضع صعب.' }
-    ];
-    elements.endgamesGrid.innerHTML = endgames.map((e, i) => `
-      <div class="card">
-        <h4>${e.name}</h4>
-        <p>${e.desc}</p>
-        <button class="btn" onclick="window.startTrain('endgame', ${i})">ابدأ التدريب</button>
+  function renderCard(item, type, index) {
+    return `
+      <div class="game-card">
+        <strong>${item.name}</strong>
+        <p style="font-size:0.8rem; color:var(--text-dim)">${item.desc}</p>
+        <button class="btn" style="width:100%; margin-top:10px;" onclick="window.startTrain('${type}', ${index})">ابدأ التدريب</button>
       </div>
-    `).join('');
+    `;
   }
 
   window.startTrain = (type, index) => {
     state.trainingMode = type;
     const pool = type === 'opening' ? [
       { name: 'Ruy Lopez', fen: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3', target: 'a6' },
-      { name: 'Sicilian Defense', fen: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2', target: 'Nf3' }
+      { name: 'Sicilian', fen: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2', target: 'Nf3' }
     ] : type === 'puzzle' ? [
       { name: 'كش مات في نقلة', fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4', target: 'Qxf7#' }
     ] : [
@@ -353,31 +340,25 @@
     state.trainingChess = new Chess(state.trainingData.fen);
     switchTab('analysis');
     renderBoard();
-    elements.engineFeedback.innerHTML = `
-      <div class="feedback-msg">الهدف: ابحث عن النقلة الصحيحة في وضع ${state.trainingData.name}</div>
-    `;
+    elements.feedbackArea.innerHTML = `<div class="msg-box">الهدف: ابحث عن النقلة الصحيحة في وضع ${state.trainingData.name}</div>`;
   };
 
   function handleTrainingMove(move) {
     const uci = move.from + move.to;
     const isCorrect = (uci === state.trainingData.target || move.san === state.trainingData.target);
     
-    const squares = document.querySelectorAll('.square');
-    squares.forEach(s => s.classList.remove('correct', 'wrong'));
-    
-    const toSq = document.querySelector(`[data-pos="${move.to}"]`);
-    
+    renderBoard();
     if (isCorrect) {
-      toSq.classList.add('correct');
-      elements.engineFeedback.innerHTML = `
-        <div class="feedback-msg msg-success">أحسنت! هذه هي النقلة الصحيحة.</div>
-        <button class="btn btn-secondary" style="margin-top:10px" onclick="window.resetTraining()">إعادة المحاولة</button>
+      highlight(move.to, 'correct');
+      elements.feedbackArea.innerHTML = `
+        <div class="msg-box msg-success">أحسنت! هذه هي النقلة الصحيحة.</div>
+        <button class="btn btn-secondary" style="width:100%" onclick="window.resetTraining()">إعادة المحاولة</button>
       `;
     } else {
-      toSq.classList.add('wrong');
-      elements.engineFeedback.innerHTML = `
-        <div class="feedback-msg msg-error">نقلة خاطئة. حاول مرة أخرى.</div>
-        <button class="btn btn-secondary" style="margin-top:10px" onclick="window.resetTraining()">إعادة المحاولة</button>
+      highlight(move.to, 'wrong');
+      elements.feedbackArea.innerHTML = `
+        <div class="msg-box msg-error">نقلة خاطئة. حاول مرة أخرى.</div>
+        <button class="btn btn-secondary" style="width:100%" onclick="window.resetTraining()">إعادة المحاولة</button>
       `;
       setTimeout(() => {
         state.trainingChess.undo();
@@ -389,16 +370,16 @@
   window.resetTraining = () => {
     state.trainingChess = new Chess(state.trainingData.fen);
     renderBoard();
-    elements.engineFeedback.innerHTML = `
-      <div class="feedback-msg">الهدف: ابحث عن النقلة الصحيحة في وضع ${state.trainingData.name}</div>
-    `;
+    elements.feedbackArea.innerHTML = `<div class="msg-box">الهدف: ابحث عن النقلة الصحيحة في وضع ${state.trainingData.name}</div>`;
   };
 
-  // ============ UTILS ============
+  // ============ ANALYZER & CLASSIFICATION ============
   function switchTab(tabId) {
     state.activeTab = tabId;
     elements.tabBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId));
-    elements.tabPanes.forEach(pane => pane.classList.toggle('active', pane.id === tabId + 'Tab'));
+    elements.tabPanels.forEach(panel => {
+      panel.classList.toggle('active', panel.id === tabId + 'Panel');
+    });
   }
 
   function updateEvalUI(score) {
@@ -409,7 +390,23 @@
     elements.evalFill.style.height = `${h}%`;
   }
 
-  function runAnalysis() {
+  function updateMoveClassification(score) {
+    if (state.currentMoveIndex === 0) return;
+    const prevScore = parseFloat(state.history[state.currentMoveIndex-1].score) || 0;
+    const currentScore = parseFloat(score) || 0;
+    const diff = Math.abs(currentScore - prevScore);
+    
+    let cls = 'good';
+    if (diff < 0.2) cls = 'best';
+    else if (diff > 2.0) cls = 'blunder';
+    else if (diff < 0.1 && Math.abs(currentScore) > 2.0) cls = 'brilliant';
+    
+    state.history[state.currentMoveIndex].score = score;
+    state.history[state.currentMoveIndex].classification = cls;
+    renderMoveHistory();
+  }
+
+  function analyze() {
     if (!state.isEngineReady || state.trainingMode) return;
     const fen = state.history[state.currentMoveIndex].fen;
     state.engine.postMessage(`position fen ${fen}`);
