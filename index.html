@@ -3,20 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chess Legend — تدريب شطرنج بالذكاء الاصطناعي</title>
-  <meta name="description" content="منصة تدريب شطرنج ذكية تستخدم Stockfish لتحليل مبارياتك وتوليد ألغاز من أخطائك الحقيقية" />
+  <title>Chess Legend — منصة التحليل والتدريب الاحترافية</title>
+  <meta name="description" content="حلل مبارياتك، أتقن الافتتاحيات، وطور نهاياتك مع أقوى محرك شطرنج في العالم" />
   <meta name="theme-color" content="#1a1410" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Reem+Kufi:wght@400;500;600;700&family=Amiri:wght@400;700&display=swap"
-    rel="stylesheet"
-  />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;700&family=Reem+Kufi:wght@400;700&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
 
   <link rel="stylesheet" href="styles.css" />
-
-  <!-- chess.js — منطق قواعد الشطرنج -->
   <script src="https://cdn.jsdelivr.net/npm/chess.js@0.10.3/chess.min.js"></script>
 </head>
 <body>
@@ -27,155 +22,122 @@
   <header>
     <div class="crown" aria-hidden="true">&#9819;</div>
     <h1>Chess Legend</h1>
-    <p class="subtitle">تدريب شطرنج بالذكاء الاصطناعي &bull; Stockfish 16</p>
+    <p class="subtitle">مختبر الشطرنج الذكي &bull; Stockfish 16</p>
   </header>
 
   <!-- ============ LOGIN ============ -->
-  <section class="login-panel" id="loginPanel" aria-label="تسجيل الدخول">
-    <h2 class="login-title">أدخل اسم حسابك على Chess.com</h2>
-    <p class="login-desc">
-      سنجلب آخر مبارياتك ونحللها بمحرك <strong>Stockfish 16</strong> الكامل (يعمل في متصفحك مباشرةً)
-      ونولّد لك ألغازاً من أخطائك الحقيقية.
-      <br />
-      <small>التحميل الأول للمحرك يستغرق 10–20 ثانية، ثم يعمل بسرعة</small>
-    </p>
+  <section class="login-panel" id="loginPanel">
+    <h2 class="login-title">أدخل حسابك لبدء التحليل الاحترافي</h2>
     <div class="input-group">
-      <label for="usernameInput" class="sr-only">اسم المستخدم على Chess.com</label>
-      <input
-        type="text"
-        class="username-input"
-        id="usernameInput"
-        placeholder="اسم المستخدم على Chess.com"
-        autocomplete="off"
-        spellcheck="false"
-      />
-      <button class="btn" id="fetchBtn" type="button">جلب المباريات وتحليلها</button>
+      <input type="text" class="username-input" id="usernameInput" placeholder="اسم المستخدم على Chess.com" />
+      <button class="btn" id="fetchBtn">تحليل شامل للمباريات</button>
     </div>
-
     <div class="depth-selector">
-      <label for="depthSelect">عمق التحليل:</label>
+      <label for="depthSelect">دقة التحليل:</label>
       <select id="depthSelect">
-        <option value="12">سريع (depth 12) &mdash; ~دقيقتان</option>
-        <option value="14" selected>متوسط (depth 14) &mdash; 3–5 دقائق</option>
-        <option value="16">عميق (depth 16) &mdash; 7–10 دقائق</option>
+        <option value="14">قياسي (Depth 14)</option>
+        <option value="16" selected>احترافي (Depth 16)</option>
+        <option value="18">ماستر (Depth 18 - أبطأ)</option>
       </select>
     </div>
-
-    <!-- رسالة الخطأ المضمّنة بدلاً من alert() -->
-    <div class="inline-error hidden" id="inputError" role="alert" aria-live="assertive"></div>
+    <div class="inline-error hidden" id="inputError"></div>
   </section>
 
-  <!-- ============ STATUS ============ -->
-  <div class="status-bar hidden" id="statusBar" role="status" aria-live="polite">
-    <span class="spinner" id="statusSpinner" aria-hidden="true"></span>
-    <span id="statusText">جاري التحميل...</span>
+  <!-- ============ STATUS BAR ============ -->
+  <div class="status-bar hidden" id="statusBar">
+    <span class="spinner"></span>
+    <span id="statusText">جاري التحليل...</span>
   </div>
 
-  <!-- ============ STATS ============ -->
-  <section class="hidden" id="statsSection" aria-label="الإحصائيات">
-    <h2 class="section-title">إحصائياتك</h2>
-    <div class="stats-grid" id="statsGrid"></div>
-  </section>
+  <!-- ============ MAIN DASHBOARD ============ -->
+  <main class="dashboard hidden" id="mainDashboard">
+    
+    <!-- Navigation Tabs -->
+    <nav class="tabs" role="tablist">
+      <button class="tab-btn active" data-tab="analysis">مراجعة المباريات</button>
+      <button class="tab-btn" data-tab="openings">مختبر الافتتاحيات</button>
+      <button class="tab-btn" data-tab="endgames">إتقان النهايات</button>
+      <button class="tab-btn" data-tab="puzzles">الألغاز الشخصية</button>
+    </nav>
 
-  <!-- ============ TRAINER ============ -->
-  <section class="hidden" id="trainerSection" aria-label="التدريب">
-    <h2 class="section-title">ألغاز من مبارياتك الفعلية</h2>
-    <p class="section-sub">كل لغز موقف حقيقي من مبارياتك — محلَّل بمحرك Stockfish مع شرح كامل للحركة الصحيحة</p>
-
-    <div class="puzzle-nav">
-      <button class="ctrl-btn" id="prevPuzzle" type="button" aria-label="اللغز السابق">&larr; السابق</button>
-      <span class="puzzle-counter" id="puzzleCounter" aria-live="polite">لغز 1 من 6</span>
-      <button class="ctrl-btn" id="nextPuzzle" type="button" aria-label="اللغز التالي">التالي &rarr;</button>
-    </div>
-
-    <div class="trainer-layout">
-
-      <!-- Board -->
-      <div class="board-wrapper">
-        <div class="board-container">
-          <div class="board-info">
-            <span class="player-name" id="topPlayer">الأسود</span>
-            <span id="boardStatus" aria-live="polite">دور الأبيض</span>
-            <span class="player-name active" id="bottomPlayer">الأبيض</span>
-          </div>
-
-          <div class="board" id="board" role="grid" aria-label="رقعة الشطرنج"></div>
-
-          <!-- Eval bar -->
-          <div class="eval-bar-wrapper" aria-hidden="true">
-            <div class="eval-bar">
-              <div class="eval-fill" id="evalFill" style="width: 50%;"></div>
-              <span class="eval-text" id="evalText">0.0</span>
+    <div class="tab-content">
+      
+      <!-- Section: Game Review (Analysis) -->
+      <section id="analysisTab" class="tab-pane active">
+        <div class="analysis-layout">
+          <div class="board-area">
+            <div class="board-header">
+              <span id="gameInfo">اختر مباراة للتحليل</span>
+              <div class="eval-badge" id="evalBadge">0.0</div>
+            </div>
+            <div class="board" id="mainBoard"></div>
+            <div class="board-controls">
+              <button class="icon-btn" id="firstMove" title="البداية">|&laquo;</button>
+              <button class="icon-btn" id="prevMove" title="السابق">&laquo;</button>
+              <button class="icon-btn" id="nextMove" title="التالي">&raquo;</button>
+              <button class="icon-btn" id="lastMove" title="النهاية">&raquo;|</button>
+              <button class="icon-btn" id="flipBoard" title="قلب الرقعة">&#8644;</button>
             </div>
           </div>
-
-          <div class="board-controls">
-            <button class="ctrl-btn" id="undoBtn" type="button" title="تراجع عن الحركة">&#8630; تراجع</button>
-            <button class="ctrl-btn" id="hintBtn" type="button" title="تلميح">&#128161; تلميح</button>
-            <button class="ctrl-btn" id="solutionBtn" type="button" title="إظهار الحل">&#128065; الحل</button>
-            <button class="ctrl-btn" id="resetBtn" type="button" title="إعادة اللغز">&#8635; إعادة</button>
-            <button class="ctrl-btn" id="flipBtn" type="button" title="قلب الرقعة">&#8644; قلب</button>
+          <div class="analysis-sidebar">
+            <div class="game-selector-box">
+              <h3>المباريات الأخيرة</h3>
+              <div class="game-list" id="gameList"></div>
+            </div>
+            <div class="move-analysis-box">
+              <h3>تحليل النقلات</h3>
+              <div class="move-history" id="moveHistory"></div>
+              <div class="engine-feedback" id="engineFeedback">
+                <p>اختر نقلة لرؤية تقييم المحرك والبدائل الأفضل.</p>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <!-- Side panel -->
-      <div class="side-panel">
-
-        <div class="panel">
-          <h3>
-            <span id="puzzleTitle">لغز</span>
-            <span class="puzzle-difficulty" id="puzzleDifficulty"></span>
-          </h3>
-          <div class="puzzle-context" id="puzzleContext"></div>
-          <div class="task-prompt" id="taskPrompt"></div>
+      <!-- Section: Openings -->
+      <section id="openingsTab" class="tab-pane">
+        <div class="feature-header">
+          <h2>مختبر الافتتاحيات</h2>
+          <p>نحلل افتتاحياتك ونقارنها بنقلات الأساتذة (Book Moves)</p>
         </div>
-
-        <div class="panel">
-          <h3>&#128221; سجل الحركات</h3>
-          <div class="move-list" id="moveList" aria-label="سجل الحركات"></div>
+        <div class="openings-grid" id="openingsGrid">
+          <!-- سيتم ملؤه برمجياً -->
         </div>
+      </section>
 
-        <div class="feedback" id="feedback" role="alert" aria-live="polite">
-          <div class="feedback-title" id="feedbackTitle"></div>
-          <div id="feedbackBody"></div>
+      <!-- Section: Endgames -->
+      <section id="endgamesTab" class="tab-pane">
+        <div class="feature-header">
+          <h2>إتقان النهايات</h2>
+          <p>مواقف حقيقية من نهايات مبارياتك التي تحتاج لتحسين</p>
         </div>
+        <div class="endgames-grid" id="endgamesGrid">
+          <!-- سيتم ملؤه برمجياً -->
+        </div>
+      </section>
 
-      </div>
+      <!-- Section: Puzzles -->
+      <section id="puzzlesTab" class="tab-pane">
+        <div class="feature-header">
+          <h2>الألغاز الشخصية</h2>
+          <p>تدرب على تكتيكات من أخطائك الفادحة</p>
+        </div>
+        <div class="puzzles-container" id="puzzlesContainer">
+          <!-- كود الألغاز السابق سيتم دمجه هنا -->
+        </div>
+      </section>
+
     </div>
-  </section>
-
-  <!-- ============ TIPS ============ -->
-  <section class="hidden" id="tipsSection" aria-label="النصائح">
-    <h2 class="section-title">نصائح مخصصة لك</h2>
-    <p class="section-sub">بناءً على تحليل Stockfish لأخطائك المتكررة</p>
-    <div class="tips-grid" id="tipsGrid"></div>
-  </section>
+  </main>
 
   <footer>
-    <p>&#9820; Chess Legend &mdash; تدريب شطرنج بالذكاء الاصطناعي &#9820;</p>
-    <p class="footer-sub">يستخدم Stockfish 16 NNUE (WebAssembly) و Chess.com Public API</p>
+    <p>&copy; 2026 Chess Legend &bull; منصة التحليل والتدريب الاحترافية</p>
   </footer>
 
 </div>
 
-<!-- ============ PROMOTION MODAL ============ -->
-<div
-  class="promo-overlay"
-  id="promoOverlay"
-  role="dialog"
-  aria-modal="true"
-  aria-label="اختر قطعة الترقية"
->
-  <div class="promo-box">
-    <h3>اختر قطعة الترقية</h3>
-    <div class="promo-pieces" id="promoPieces"></div>
-  </div>
-</div>
-
-<!-- ============ MAIN APP SCRIPT ============ -->
-<!-- استخدام app.js جديد تماماً -->
-<script src="app.js"></script>
-
+<!-- Scripts -->
+<script src="main.js"></script>
 </body>
 </html>
