@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chess Legend — تدريب شطرنج بالذكاء الاصطناعي</title>
-  <meta name="description" content="منصة تدريب شطرنج ذكية تستخدم Stockfish لتحليل مبارياتك وتوليد ألغاز من أخطائك الحقيقية مع تقييمات دقيقة مثل Chess.com" />
+  <meta name="description" content="منصة تدريب شطرنج ذكية تستخدم Stockfish لتحليل مبارياتك وتوليد ألغاز من أخطائك الحقيقية" />
   <meta name="theme-color" content="#1a1410" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -14,7 +14,7 @@
     rel="stylesheet"
   />
 
-  <link rel="stylesheet" href="styles-new.css" />
+  <link rel="stylesheet" href="styles.css" />
 
   <!-- chess.js — منطق قواعد الشطرنج -->
   <script src="https://cdn.jsdelivr.net/npm/chess.js@0.10.3/chess.min.js"></script>
@@ -27,17 +27,17 @@
   <header>
     <div class="crown" aria-hidden="true">&#9819;</div>
     <h1>Chess Legend</h1>
-    <p class="subtitle">تدريب شطرنج بالذكاء الاصطناعي &bull; Stockfish 16+ WASM</p>
+    <p class="subtitle">تدريب شطرنج بالذكاء الاصطناعي &bull; Stockfish 16</p>
   </header>
 
   <!-- ============ LOGIN ============ -->
   <section class="login-panel" id="loginPanel" aria-label="تسجيل الدخول">
     <h2 class="login-title">أدخل اسم حسابك على Chess.com</h2>
     <p class="login-desc">
-      سنجلب آخر مبارياتك ونحللها بمحرك <strong>Stockfish 16+ WASM</strong> الحقيقي (يعمل في متصفحك مباشرةً)
-      ونولّد لك ألغازاً من أخطائك الحقيقية مع تقييمات دقيقة مثل Chess.com تماماً.
+      سنجلب آخر مبارياتك ونحللها بمحرك <strong>Stockfish 16</strong> الكامل (يعمل في متصفحك مباشرةً)
+      ونولّد لك ألغازاً من أخطائك الحقيقية.
       <br />
-      <small>التحميل الأول للمحرك يستغرق 10–20 ثانية، ثم يعمل بسرعة فائقة</small>
+      <small>التحميل الأول للمحرك يستغرق 10–20 ثانية، ثم يعمل بسرعة</small>
     </p>
     <div class="input-group">
       <label for="usernameInput" class="sr-only">اسم المستخدم على Chess.com</label>
@@ -53,12 +53,11 @@
     </div>
 
     <div class="depth-selector">
-      <label for="depthSelect">عمق التحليل (الدقة):</label>
+      <label for="depthSelect">عمق التحليل:</label>
       <select id="depthSelect">
-        <option value="18">سريع (depth 18) &mdash; ~2 دقيقة</option>
-        <option value="20" selected>متوسط (depth 20) &mdash; 3–5 دقائق</option>
-        <option value="22">عميق (depth 22) &mdash; 7–10 دقائق</option>
-        <option value="25">دقيق جداً (depth 25) &mdash; 15–20 دقيقة</option>
+        <option value="12">سريع (depth 12) &mdash; ~دقيقتان</option>
+        <option value="14" selected>متوسط (depth 14) &mdash; 3–5 دقائق</option>
+        <option value="16">عميق (depth 16) &mdash; 7–10 دقائق</option>
       </select>
     </div>
 
@@ -81,7 +80,7 @@
   <!-- ============ TRAINER ============ -->
   <section class="hidden" id="trainerSection" aria-label="التدريب">
     <h2 class="section-title">ألغاز من مبارياتك الفعلية</h2>
-    <p class="section-sub">كل لغز موقف حقيقي من مبارياتك — محلَّل بمحرك Stockfish مع تقييمات دقيقة مثل Chess.com</p>
+    <p class="section-sub">كل لغز موقف حقيقي من مبارياتك — محلَّل بمحرك Stockfish مع شرح كامل للحركة الصحيحة</p>
 
     <div class="puzzle-nav">
       <button class="ctrl-btn" id="prevPuzzle" type="button" aria-label="اللغز السابق">&larr; السابق</button>
@@ -154,8 +153,8 @@
   </section>
 
   <footer>
-    <p>&#9820; Chess Legend — تدريب شطرنج بالذكاء الاصطناعي &#9820;</p>
-    <p class="footer-sub">يستخدم Stockfish 16+ WASM (محرك حقيقي) و Chess.com Public API مع معايير تقييم Chess.com</p>
+    <p>&#9820; Chess Legend &mdash; تدريب شطرنج بالذكاء الاصطناعي &#9820;</p>
+    <p class="footer-sub">يستخدم Stockfish 16 NNUE (WebAssembly) و Chess.com Public API</p>
   </footer>
 
 </div>
@@ -175,8 +174,8 @@
 </div>
 
 <!-- ============ MAIN APP SCRIPT ============ -->
-<!-- استخدام app-new.js محسّن -->
-<script src="app-new.js"></script>
+<!-- استخدام app.js جديد تماماً -->
+<script src="app.js"></script>
 
 </body>
 </html>

@@ -1,0 +1,24 @@
+{
+  "name": "chess-legend",
+  "version": "1.0.0",
+  "description": "**Chess Legend** هي منصة تدريب شطرنج متطورة تعتمد على الذكاء الاصطناعي لتحليل مبارياتك الفعلية من Chess.com واستخراج الألغاز من أخطائك الشخصية.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moh700mmed70-bit/chess-legend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/moh700mmed70-bit/chess-legend/issues"
+  },
+  "homepage": "https://github.com/moh700mmed70-bit/chess-legend#readme",
+  "dependencies": {
+    "chess.js": "^1.4.0",
+    "stockfish": "^18.0.7"
+  }
+}
