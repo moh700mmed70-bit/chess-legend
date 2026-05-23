@@ -1,6 +1,6 @@
 /**
- * Chess Legend - Professional Analysis & Training Platform
- * Version: 2.0
+ * Chess Legend - Pro Analysis & Interactive Trainer
+ * Version: 3.0
  */
 
 'use strict';
@@ -9,237 +9,239 @@
   // ============ CONFIG & STATE ============
   const CONFIG = {
     STOCKFISH_PATH: 'stockfish.js',
-    MAX_GAMES: 10,
-    DEPTH_DEFAULT: 14
+    DEPTH: 16,
+    MAX_GAMES: 10
   };
 
   const state = {
     username: '',
     games: [],
-    currentGameIndex: -1,
-    currentMoveIndex: -1,
-    analysisData: [], // التقييمات لكل نقلة في المباراة الحالية
-    puzzles: [],
-    openings: [],
-    endgames: [],
-    game: new Chess(),
+    currentGame: null,
+    currentMoveIndex: 0,
+    history: [], // [{fen, move, score, classification}]
+    board: null,
     engine: null,
     isEngineReady: false,
+    activeTab: 'analysis',
     boardFlipped: false,
-    activeTab: 'analysis'
+    // Interactive Features
+    trainingMode: null, // 'opening', 'puzzle', 'endgame'
+    targetMove: null,
+    currentTrainingData: null
   };
 
-  // ============ DOM ELEMENTS ============
   const elements = {
+    mainBoard: document.getElementById('mainBoard'),
+    gameList: document.getElementById('gameList'),
+    moveHistory: document.getElementById('moveHistory'),
+    evalBarFill: document.getElementById('evalBarFill'),
+    evalBarText: document.getElementById('evalBarText'),
+    engineFeedback: document.getElementById('engineFeedback'),
     usernameInput: document.getElementById('usernameInput'),
     fetchBtn: document.getElementById('fetchBtn'),
-    depthSelect: document.getElementById('depthSelect'),
     loginPanel: document.getElementById('loginPanel'),
     mainDashboard: document.getElementById('mainDashboard'),
-    statusBar: document.getElementById('statusBar'),
-    statusText: document.getElementById('statusText'),
-    gameList: document.getElementById('gameList'),
-    mainBoard: document.getElementById('mainBoard'),
-    moveHistory: document.getElementById('moveHistory'),
-    engineFeedback: document.getElementById('engineFeedback'),
-    evalBadge: document.getElementById('evalBadge'),
-    gameInfo: document.getElementById('gameInfo'),
-    // Controls
-    prevMove: document.getElementById('prevMove'),
-    nextMove: document.getElementById('nextMove'),
-    firstMove: document.getElementById('firstMove'),
-    lastMove: document.getElementById('lastMove'),
-    flipBoard: document.getElementById('flipBoard'),
-    // Tabs
     tabBtns: document.querySelectorAll('.tab-btn'),
     tabPanes: document.querySelectorAll('.tab-pane'),
-    // Feature Grids
     openingsGrid: document.getElementById('openingsGrid'),
-    endgamesGrid: document.getElementById('endgamesGrid')
+    endgamesGrid: document.getElementById('endgamesGrid'),
+    puzzlesContainer: document.getElementById('puzzlesContainer')
   };
 
   // ============ INITIALIZATION ============
   function init() {
-    elements.fetchBtn.addEventListener('click', startAnalysis);
-    
-    // Tab Switching
+    elements.fetchBtn.addEventListener('click', startApp);
     elements.tabBtns.forEach(btn => {
       btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
+    
+    initEngine();
+    setupGlobalControls();
+  }
 
-    // Board Navigation
-    elements.prevMove.addEventListener('click', () => navigateMove(-1));
-    elements.nextMove.addEventListener('click', () => navigateMove(1));
-    elements.firstMove.addEventListener('click', () => navigateMove(-999));
-    elements.lastMove.addEventListener('click', () => navigateMove(999));
-    elements.flipBoard.addEventListener('click', () => {
+  function setupGlobalControls() {
+    document.getElementById('prevMove').addEventListener('click', () => navigateHistory(-1));
+    document.getElementById('nextMove').addEventListener('click', () => navigateHistory(1));
+    document.getElementById('firstMove').addEventListener('click', () => navigateHistory(-999));
+    document.getElementById('lastMove').addEventListener('click', () => navigateHistory(999));
+    document.getElementById('flipBoard').addEventListener('click', () => {
       state.boardFlipped = !state.boardFlipped;
       renderBoard();
     });
-
-    initEngine();
   }
 
   // ============ ENGINE LOGIC ============
   function initEngine() {
     if (state.engine) state.engine.terminate();
-    const url = CONFIG.STOCKFISH_PATH + '?v=' + Date.now();
-    state.engine = new Worker(url);
-    
+    state.engine = new Worker(CONFIG.STOCKFISH_PATH + '?v=' + Date.now());
     state.engine.onmessage = (e) => {
-      const msg = e.data;
-      if (msg === 'uciok') state.engine.postMessage('isready');
-      if (msg === 'readyok') state.isEngineReady = true;
-      handleEngineMessage(msg);
+      if (e.data === 'uciok') state.engine.postMessage('isready');
+      if (e.data === 'readyok') state.isEngineReady = true;
+      handleEngineOutput(e.data);
     };
     state.engine.postMessage('uci');
   }
 
-  function handleEngineMessage(msg) {
-    // معالجة رسائل المحرك للتقييم الحي
+  function handleEngineOutput(msg) {
     if (msg.includes('score cp') || msg.includes('score mate')) {
       const score = parseScore(msg);
-      updateEvalUI(score);
+      updateEvalBar(score);
     }
     if (msg.startsWith('bestmove')) {
-      const bestMove = msg.split(' ')[1];
-      updateBestMoveUI(bestMove);
+      const best = msg.split(' ')[1];
+      state.currentBestMove = best;
     }
   }
 
   function parseScore(msg) {
     if (msg.includes('score cp')) {
-      const cp = parseInt(msg.split('cp ')[1]);
-      return (cp / 100).toFixed(1);
+      return (parseInt(msg.split('cp ')[1]) / 100).toFixed(1);
     } else {
       const mate = parseInt(msg.split('mate ')[1]);
       return 'M' + Math.abs(mate);
     }
   }
 
-  // ============ DATA FETCHING ============
-  async function startAnalysis() {
+  // ============ APP FLOW ============
+  async function startApp() {
     const user = elements.usernameInput.value.trim();
     if (!user) return;
     state.username = user;
     
-    showStatus('جاري جلب المباريات والتحليل...');
+    toggleStatus(true, 'جاري جلب مبارياتك من Chess.com...');
     try {
       const res = await fetch(`https://api.chess.com/pub/player/${user}/games/archives`);
-      const data = await res.json();
-      const lastMonth = data.archives[data.archives.length - 1];
+      const archives = (await res.json()).archives;
+      const lastArchive = archives[archives.length - 1];
       
-      const gamesRes = await fetch(lastMonth);
-      const gamesData = await gamesRes.json();
-      state.games = gamesData.games.slice(-CONFIG.MAX_GAMES).reverse();
+      const gamesRes = await fetch(lastArchive);
+      state.games = (await gamesRes.json()).games.slice(-CONFIG.MAX_GAMES).reverse();
       
       renderGameList();
       elements.loginPanel.classList.add('hidden');
       elements.mainDashboard.classList.remove('hidden');
-      hideStatus();
+      toggleStatus(false);
       
-      // تحليل تلقائي لأول مباراة
       if (state.games.length > 0) selectGame(0);
-      
-      // استخراج الافتتاحيات والنهايات (محاكاة ذكية)
-      extractFeatures();
-    } catch (err) {
-      console.error(err);
-      hideStatus();
+      prepareTrainingFeatures();
+    } catch (e) {
+      console.error(e);
+      toggleStatus(true, 'خطأ في جلب البيانات. تأكد من اسم المستخدم.');
     }
   }
 
-  function showStatus(text) {
-    elements.statusText.textContent = text;
-    elements.statusBar.classList.remove('hidden');
+  function toggleStatus(show, text = '') {
+    const bar = document.getElementById('statusBar');
+    const txt = document.getElementById('statusText');
+    if (show) {
+      bar.classList.remove('hidden');
+      txt.textContent = text;
+    } else {
+      bar.classList.add('hidden');
+    }
   }
 
-  function hideStatus() {
-    elements.statusBar.classList.add('hidden');
+  // ============ GAME ANALYSIS ============
+  window.selectGame = async (index) => {
+    state.currentGame = state.games[index];
+    const chess = new Chess();
+    chess.load_pgn(state.currentGame.pgn);
+    
+    state.history = [{ fen: chess.fen(), move: 'البداية', score: 0, classification: 'book' }];
+    const moves = chess.history({ verbose: true });
+    
+    const analysisChess = new Chess();
+    state.history = [{ fen: analysisChess.fen(), move: 'Start', score: 0, classification: 'book' }];
+    
+    for (let m of moves) {
+      analysisChess.move(m);
+      state.history.push({
+        fen: analysisChess.fen(),
+        move: m.san,
+        uci: m.from + m.to + (m.promotion || ''),
+        score: 0,
+        classification: 'good' // سيتم تحديثه لاحقاً بالتحليل العميق
+      });
+    }
+    
+    state.currentMoveIndex = state.history.length - 1;
+    renderGameList();
+    renderMoveHistory();
+    renderBoard();
+    analyzePosition();
+  };
+
+  function classifyMove(prevScore, currentScore, isBest) {
+    const diff = Math.abs(prevScore - currentScore);
+    if (isBest) return 'best';
+    if (diff < 0.2) return 'excellent';
+    if (diff < 0.5) return 'good';
+    if (diff < 1.0) return 'inaccuracy';
+    if (diff < 2.0) return 'mistake';
+    return 'blunder';
   }
 
   // ============ UI RENDERING ============
-  function switchTab(tabId) {
-    state.activeTab = tabId;
-    elements.tabBtns.forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.tab === tabId);
-    });
-    elements.tabPanes.forEach(pane => {
-      pane.classList.toggle('active', pane.id === tabId + 'Tab');
-    });
-  }
-
   function renderGameList() {
     elements.gameList.innerHTML = state.games.map((g, i) => `
-      <div class="game-item ${state.currentGameIndex === i ? 'active' : ''}" onclick="window.selectGame(${i})">
+      <div class="game-card ${state.currentGame === g ? 'active' : ''}" onclick="window.selectGame(${i})">
         <strong>${g.white.username} vs ${g.black.username}</strong>
-        <div style="font-size: 0.8rem; color: var(--text-dim)">${g.white.result === 'win' ? 'فوز الأبيض' : 'فوز الأسود'}</div>
+        <div style="font-size: 0.75rem; color: var(--text-dim)">${new Date(g.end_time * 1000).toLocaleDateString()}</div>
       </div>
     `).join('');
   }
 
-  window.selectGame = (index) => {
-    state.currentGameIndex = index;
-    const gameData = state.games[index];
-    state.game.load_pgn(gameData.pgn);
-    state.currentMoveIndex = state.game.history().length;
-    
-    elements.gameInfo.textContent = `${gameData.white.username} ⚔️ ${gameData.black.username}`;
-    renderGameList();
-    renderMoveHistory();
-    renderBoard();
-    analyzeCurrentPosition();
-  };
-
   function renderMoveHistory() {
-    const history = state.game.history();
-    elements.moveHistory.innerHTML = history.map((m, i) => `
-      <span class="move-node ${state.currentMoveIndex === i + 1 ? 'active' : ''}" onclick="window.goToMove(${i + 1})">
-        ${Math.floor(i/2) + 1}${i%2===0?'.':'...'} ${m}
-      </span>
-    `).join('');
+    let html = '<div class="move-list">';
+    for (let i = 1; i < state.history.length; i++) {
+      if (i % 2 !== 0) html += `<div class="move-num">${Math.floor(i/2) + 1}.</div>`;
+      const m = state.history[i];
+      const activeClass = state.currentMoveIndex === i ? 'active' : '';
+      const badgeClass = `badge-${m.classification}`;
+      html += `
+        <div class="move-val ${activeClass}" onclick="window.goToMove(${i})">
+          ${m.move}
+          <span class="move-eval-icon ${badgeClass}">${getEvalIcon(m.classification)}</span>
+        </div>
+      `;
+    }
+    html += '</div>';
+    elements.moveHistory.innerHTML = html;
+  }
+
+  function getEvalIcon(cls) {
+    const icons = { brilliant: '!!', great: '!', best: '★', excellent: '✓', good: '○', inaccuracy: '?!', mistake: '?', blunder: '??', book: '📖' };
+    return icons[cls] || '';
   }
 
   window.goToMove = (index) => {
     state.currentMoveIndex = index;
-    const history = state.game.history();
-    const tempGame = new Chess();
-    for (let i = 0; i < index; i++) tempGame.move(history[i]);
-    
-    // تحديث رقعة العرض دون تغيير المباراة الأصلية في الذاكرة
-    renderBoardAt(tempGame.fen());
+    renderBoard();
     renderMoveHistory();
-    analyzePosition(tempGame.fen());
+    analyzePosition();
   };
 
-  function navigateMove(dir) {
-    let newIdx = state.currentMoveIndex + dir;
-    const max = state.game.history().length;
-    if (newIdx < 0) newIdx = 0;
-    if (newIdx > max) newIdx = max;
-    window.goToMove(newIdx);
+  function navigateHistory(dir) {
+    let n = state.currentMoveIndex + dir;
+    if (n < 0) n = 0;
+    if (n >= state.history.length) n = state.history.length - 1;
+    window.goToMove(n);
   }
 
   function renderBoard() {
-    const history = state.game.history();
-    const tempGame = new Chess();
-    for (let i = 0; i < state.currentMoveIndex; i++) tempGame.move(history[i]);
-    renderBoardAt(tempGame.fen());
-  }
-
-  function renderBoardAt(fen) {
-    elements.mainBoard.innerHTML = '';
+    const fen = state.history[state.currentMoveIndex].fen;
     const position = fen.split(' ')[0];
     const rows = position.split('/');
+    elements.mainBoard.innerHTML = '';
     
-    let boardArray = [];
+    let boardArr = [];
     for (let row of rows) {
-      let rowArr = [];
-      for (let char of row) {
-        if (isNaN(char)) rowArr.push(char);
-        else for (let i=0; i<parseInt(char); i++) rowArr.push(null);
+      let r = [];
+      for (let c of row) {
+        if (isNaN(c)) r.push(c);
+        else for (let i=0; i<parseInt(c); i++) r.push(null);
       }
-      boardArray.push(rowArr);
+      boardArr.push(r);
     }
 
     for (let i = 0; i < 8; i++) {
@@ -248,19 +250,43 @@
         const c = state.boardFlipped ? 7 - j : j;
         const square = document.createElement('div');
         square.className = `square ${(r+c)%2===0?'light':'dark'}`;
+        square.dataset.pos = getSquareName(r, c);
         
-        const piece = boardArray[r][c];
+        const piece = boardArr[r][c];
         if (piece) {
           const img = document.createElement('img');
           img.src = getPieceImg(piece);
           img.className = 'piece';
+          img.draggable = true;
+          img.dataset.from = square.dataset.pos;
+          img.addEventListener('dragstart', handleDragStart);
           square.appendChild(img);
         }
+        
+        square.addEventListener('dragover', e => e.preventDefault());
+        square.addEventListener('drop', handleDrop);
         elements.mainBoard.appendChild(square);
+      }
+    }
+    
+    // إضافة تظليل لآخر نقلة
+    if (state.currentMoveIndex > 0) {
+      const lastMove = state.history[state.currentMoveIndex].uci;
+      if (lastMove) {
+        const from = lastMove.substring(0, 2);
+        const to = lastMove.substring(2, 4);
+        highlightSquare(from);
+        highlightSquare(to);
       }
     }
   }
 
+  function highlightSquare(pos) {
+    const sq = document.querySelector(`[data-pos="${pos}"]`);
+    if (sq) sq.classList.add('last-move');
+  }
+
+  function getSquareName(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
   function getPieceImg(p) {
     const color = p === p.toUpperCase() ? 'w' : 'b';
     const type = p.toLowerCase();
@@ -268,67 +294,115 @@
     return `https://lichess1.org/assets/piece/cburnett/${color}${map[type]}.svg`;
   }
 
-  // ============ ANALYSIS ENGINE ============
-  function analyzePosition(fen) {
-    if (!state.isEngineReady) return;
-    state.engine.postMessage(`position fen ${fen}`);
-    state.engine.postMessage(`go depth ${elements.depthSelect.value}`);
-  }
-
-  function analyzeCurrentPosition() {
-    const history = state.game.history();
-    const tempGame = new Chess();
-    for (let i = 0; i < state.currentMoveIndex; i++) tempGame.move(history[i]);
-    analyzePosition(tempGame.fen());
-  }
-
-  function updateEvalUI(score) {
-    elements.evalBadge.textContent = score;
-    elements.evalBadge.style.background = score.toString().includes('-') ? '#e74c3c' : '#2ecc71';
-    elements.evalBadge.style.color = '#fff';
-  }
-
-  function updateBestMoveUI(bestMove) {
-    elements.engineFeedback.innerHTML = `
-      <div style="color: var(--accent); font-weight: bold;">أفضل نقلة: ${bestMove}</div>
-      <p style="font-size: 0.8rem; margin-top: 5px;">المحرك يقترح هذه النقلة كأفضل خيار استراتيجي في هذا الوضع.</p>
-    `;
-  }
-
-  // ============ FEATURES EXTRACTION ============
-  function extractFeatures() {
-    // محاكاة استخراج الافتتاحيات والنهايات من المباريات المجلوبة
-    // في نسخة كاملة، سنقوم بتحليل كل مباراة بالكامل
+  // ============ INTERACTIVE DRAG & DROP ============
+  let draggedPieceFrom = null;
+  function handleDragStart(e) { draggedPieceFrom = e.target.dataset.from; }
+  function handleDrop(e) {
+    const to = e.currentTarget.dataset.pos;
+    const from = draggedPieceFrom;
+    if (from === to) return;
     
-    // الافتتاحيات
+    const chess = new Chess(state.history[state.currentMoveIndex].fen);
+    const move = chess.move({ from, to, promotion: 'q' });
+    
+    if (move) {
+      if (state.trainingMode) {
+        handleTrainingMove(move);
+      } else {
+        // إضافة نقلة جديدة للتحليل اليدوي
+        state.history = state.history.slice(0, state.currentMoveIndex + 1);
+        state.history.push({
+          fen: chess.fen(),
+          move: move.san,
+          uci: from + to + (move.promotion || ''),
+          score: 0,
+          classification: 'good'
+        });
+        state.currentMoveIndex++;
+        renderBoard();
+        renderMoveHistory();
+        analyzePosition();
+      }
+    }
+  }
+
+  // ============ TRAINING FEATURES ============
+  function prepareTrainingFeatures() {
+    // استخراج الافتتاحيات
     const openings = [
-      { name: 'Ruy Lopez', result: 'خسارة', error: 'خرجت عن الكتاب في النقلة 7 بنقلة h3', fix: 'النقلة الصحيحة هي d4 للسيطرة على الوسط.' },
-      { name: 'Sicilian Defense', result: 'فوز', error: 'لعبت بدقة عالية', fix: 'استمر في دراسة تفريعات Najdorf.' }
+      { name: 'Ruy Lopez', fen: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3', target: 'a6', desc: 'هذه هي نقلة Morphy الدفاعية، الأكثر شيوعاً.' },
+      { name: 'Sicilian Defense', fen: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2', target: 'Nf3', desc: 'تطوير الحصان للسيطرة على الوسط والتحضير لـ d4.' }
     ];
     
-    elements.openingsGrid.innerHTML = openings.map(o => `
-      <div class="card">
-        <h4>${o.name}</h4>
-        <p>الحالة: <strong>${o.result}</strong></p>
-        <p>${o.error}</p>
-        <div class="engine-feedback">${o.fix}</div>
+    elements.openingsGrid.innerHTML = openings.map((o, i) => `
+      <div class="feature-card">
+        <h3>${o.name}</h3>
+        <p>${o.desc}</p>
+        <button class="btn" onclick="window.startTraining('opening', ${i})">تدرب الآن</button>
       </div>
     `).join('');
 
-    // النهايات
+    // استخراج النهايات
     const endgames = [
-      { type: 'نهاية ملك وبيادق', status: 'تعادل ضائع', tip: 'ضيعت الفوز بسبب عدم تفعيل الملك في الوقت المناسب.' },
-      { type: 'نهاية رخ وبيادق', status: 'خسارة', tip: 'وضعية الرخ كانت سلبية، كان يجب وضعه خلف البيادق السالكة.' }
+      { name: 'نهاية ملك ورخ', fen: '8/8/8/8/8/2k5/2r5/4K3 w - - 0 1', target: 'Kf1', desc: 'تعلم كيف تحافظ على التعادل أو تمنع المات.' }
     ];
-
-    elements.endgamesGrid.innerHTML = endgames.map(e => `
-      <div class="card">
-        <h4>${e.type}</h4>
-        <p>النتيجة: <strong>${e.status}</strong></p>
-        <p>${e.tip}</p>
-        <button class="btn" style="width:100%; margin-top:10px;">تدرب على الموقف</button>
+    
+    elements.endgamesGrid.innerHTML = endgames.map((e, i) => `
+      <div class="feature-card">
+        <h3>${e.name}</h3>
+        <p>${e.desc}</p>
+        <button class="btn" onclick="window.startTraining('endgame', ${i})">ابدأ التدريب</button>
       </div>
     `).join('');
+  }
+
+  window.startTraining = (type, index) => {
+    state.trainingMode = type;
+    const data = type === 'opening' ? [
+      { name: 'Ruy Lopez', fen: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3', target: 'a6' },
+      { name: 'Sicilian Defense', fen: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2', target: 'Nf3' }
+    ][index] : [
+      { name: 'نهاية ملك ورخ', fen: '8/8/8/8/8/2k5/2r5/4K3 w - - 0 1', target: 'Kf1' }
+    ][index];
+    
+    state.currentTrainingData = data;
+    state.history = [{ fen: data.fen, move: 'تدريب', score: 0, classification: 'book' }];
+    state.currentMoveIndex = 0;
+    switchTab('analysis');
+    renderBoard();
+    elements.engineFeedback.innerHTML = `<div class="feedback-box info">الهدف: ابحث عن النقلة الصحيحة في وضع ${data.name}</div>`;
+  };
+
+  function handleTrainingMove(move) {
+    const uci = move.from + move.to;
+    if (uci === state.currentTrainingData.target || move.san === state.currentTrainingData.target) {
+      elements.engineFeedback.innerHTML = `<div class="feedback-box feedback-success">أحسنت! هذه هي النقلة الصحيحة.</div>`;
+    } else {
+      elements.engineFeedback.innerHTML = `<div class="feedback-box feedback-error">نقلة خاطئة. حاول مرة أخرى أو ابحث عن النقلة الأفضل.</div>`;
+      setTimeout(() => navigateHistory(0), 1000);
+    }
+  }
+
+  // ============ UTILS ============
+  function switchTab(tabId) {
+    state.activeTab = tabId;
+    elements.tabBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId));
+    elements.tabPanes.forEach(pane => pane.classList.toggle('active', pane.id === tabId + 'Tab'));
+  }
+
+  function updateEvalBar(score) {
+    let val = parseFloat(score);
+    if (isNaN(val)) val = score.startsWith('M') ? 10 : -10;
+    const percent = Math.max(5, Math.min(95, 50 + (val * 10)));
+    elements.evalBarFill.style.height = `${percent}%`;
+    elements.evalBarText.textContent = score;
+  }
+
+  function analyzePosition() {
+    if (!state.isEngineReady) return;
+    const fen = state.history[state.currentMoveIndex].fen;
+    state.engine.postMessage(`position fen ${fen}`);
+    state.engine.postMessage(`go depth ${CONFIG.DEPTH}`);
   }
 
   init();
