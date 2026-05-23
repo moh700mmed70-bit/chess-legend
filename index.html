@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chess Legend — مراجعة مباريات الشطرنج</title>
-  <meta name="description" content="تطبيق مراجعة مباريات شطرنج احترافي يطابق Chess.com مع تقرير دقة وتحليل شامل" />
+  <meta name="description" content="مراجعة مباريات شطرنج احترافية مع Stockfish وتقرير دقة شامل مشابه لتجربة Chess.com" />
   <meta name="theme-color" content="#1a1410" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -20,20 +20,16 @@
 <body>
 
 <div class="container">
-
-  <!-- ============ HEADER ============ -->
   <header>
     <div class="crown">♔</div>
     <h1>Chess Legend</h1>
-    <p class="subtitle">مراجعة مباريات الشطرنج بالذكاء الاصطناعي • Stockfish 16+ WASM</p>
+    <p class="subtitle">سجل مبارياتك أولاً، ثم مراجعة كاملة نقلة بنقلة بمحرك Stockfish</p>
   </header>
 
-  <!-- ============ LOGIN ============ -->
   <section class="login-panel" id="loginPanel">
     <h2 class="login-title">أدخل اسم حسابك على Chess.com</h2>
     <p class="login-desc">
-      سنجلب آخر مبارياتك ونحللها بمحرك <strong>Stockfish 16+ WASM</strong> الحقيقي
-      ونعطيك تقرير دقة شامل لكل مباراة مثل Chess.com تماماً.
+      سنجلب أحدث مبارياتك من Chess.com ونعرضها كسجل واضح. عند اختيار أي مباراة سيحللها المحرك بالكامل أولاً، ثم تظهر لك شاشة تقرير شاملة قبل بدء المراجعة التفصيلية.
     </p>
     <div class="input-group">
       <input
@@ -44,22 +40,22 @@
         autocomplete="off"
         spellcheck="false"
       />
-      <button class="btn" id="fetchBtn">جلب المباريات وتحليلها</button>
+      <button class="btn" id="fetchBtn">عرض سجل المباريات</button>
     </div>
 
     <div class="depth-selector">
-      <label for="depthSelect">عمق التحليل:</label>
+      <label for="depthSelect">قوة التحليل:</label>
       <select id="depthSelect">
-        <option value="20">متوسط (depth 20) — 3-5 دقائق</option>
-        <option value="22" selected>عميق (depth 22) — 7-10 دقائق</option>
-        <option value="25">دقيق جداً (depth 25) — 15-20 دقيقة</option>
+        <option value="16">سريع ودقيق — depth 16</option>
+        <option value="18" selected>موصى به — depth 18</option>
+        <option value="20">عميق — depth 20</option>
+        <option value="22">دقيق جداً — depth 22</option>
       </select>
     </div>
 
     <div class="inline-error hidden" id="inputError" role="alert"></div>
   </section>
 
-  <!-- ============ STATUS BAR ============ -->
   <div class="status-bar hidden" id="statusBar" role="status" aria-live="polite">
     <span class="spinner"></span>
     <span id="statusText">جاري التحميل...</span>
@@ -68,37 +64,64 @@
     </div>
   </div>
 
-  <!-- ============ REVIEW SECTION ============ -->
-  <section class="review-section hidden" id="reviewSection">
-    <h2 class="section-title">مراجعة المباريات</h2>
+  <section class="history-section hidden" id="historySection">
+    <div class="section-heading-row">
+      <div>
+        <h2 class="section-title">سجل المباريات</h2>
+        <p class="section-note">اضغط على المباراة التي تريدها، وسيتم تحليلها بالكامل قبل فتح المراجعة.</p>
+      </div>
+      <button class="ctrl-btn" id="refreshBtn">تحديث السجل</button>
+    </div>
+    <div class="games-grid" id="gamesGrid"></div>
+  </section>
 
-    <!-- Game Selector -->
-    <div class="game-selector-wrapper">
-      <label for="gameSelector">اختر مباراة:</label>
-      <select id="gameSelector" class="game-selector"></select>
+  <section class="summary-section hidden" id="summarySection">
+    <div class="summary-hero">
+      <div>
+        <p class="eyebrow">تقرير المباراة</p>
+        <h2 id="summaryTitle">جاهز للمراجعة</h2>
+        <p id="summarySubtitle">تم تحليل المباراة بالكامل. راجع الدقة والتصنيفات ثم ابدأ المراجعة نقلة بنقلة.</p>
+      </div>
+      <div class="summary-score-circle">
+        <span id="summaryAccuracy">--%</span>
+        <small>دقتك</small>
+      </div>
+    </div>
+    <div class="summary-grid" id="summaryGrid"></div>
+    <div class="classification-table" id="classificationTable"></div>
+    <div class="summary-actions">
+      <button class="btn" id="startReviewBtn">بدء المراجعة</button>
+      <button class="ctrl-btn" id="backToHistoryBtn">العودة للسجل</button>
+    </div>
+  </section>
+
+  <section class="review-section hidden" id="reviewSection">
+    <div class="section-heading-row">
+      <div>
+        <h2 class="section-title">مراجعة المباراة</h2>
+        <p class="section-note" id="reviewNote">تنقل بين النقلات واقرأ سبب قوة أو ضعف كل نقلة.</p>
+      </div>
+      <button class="ctrl-btn" id="reviewBackBtn">التقرير</button>
     </div>
 
-    <!-- Accuracy Report -->
     <div class="accuracy-report">
       <div class="accuracy-header">
-        <span class="accuracy-label">دقة اللعب</span>
-        <span class="accuracy-score" id="accuracyScore">100%</span>
+        <span class="accuracy-label">تقييم الموقف</span>
+        <span class="accuracy-score" id="accuracyScore">0.0</span>
       </div>
       <div class="accuracy-bar-wrapper">
         <div class="accuracy-bar">
-          <div class="accuracy-fill" id="accuracyBar" style="width: 100%;"></div>
+          <div class="accuracy-fill" id="accuracyBar" style="width: 50%;"></div>
         </div>
       </div>
       <div class="game-stats" id="gameStats"></div>
     </div>
 
-    <!-- Main Layout -->
     <div class="review-layout">
-      <!-- Board Section -->
       <div class="board-section">
         <div class="board-info">
           <span class="player-name" id="topPlayer">الأسود</span>
-          <span id="boardStatus">دور الأبيض</span>
+          <span id="boardStatus">جاهز</span>
           <span class="player-name active" id="bottomPlayer">الأبيض</span>
         </div>
 
@@ -111,18 +134,19 @@
           </div>
         </div>
 
+        <div class="move-explanation" id="moveExplanation"></div>
+
         <div class="board-controls">
-          <button class="ctrl-btn" id="prevBtn">← السابقة</button>
-          <span class="move-counter" id="moveCounter">النقلة 1 من 40</span>
-          <button class="ctrl-btn" id="nextBtn">التالية →</button>
-          <button class="ctrl-btn" id="flipBtn">قلب</button>
-          <button class="ctrl-btn" id="resetBtn">إعادة</button>
+          <button class="ctrl-btn" id="prevBtn">السابقة</button>
+          <span class="move-counter" id="moveCounter">النقلة 0 من 0</span>
+          <button class="ctrl-btn" id="nextBtn">التالية</button>
+          <button class="ctrl-btn" id="flipBtn">قلب الرقعة</button>
+          <button class="ctrl-btn" id="resetBtn">البداية</button>
         </div>
       </div>
 
-      <!-- Moves List Section -->
       <div class="moves-section">
-        <h3>تحليل النقلات</h3>
+        <h3>النقلات والتحليل</h3>
         <div class="moves-list" id="movesList"></div>
       </div>
     </div>
@@ -130,20 +154,10 @@
 
   <footer>
     <p>♔ Chess Legend — مراجعة مباريات الشطرنج بالذكاء الاصطناعي ♔</p>
-    <p class="footer-sub">يستخدم Stockfish 16+ WASM و Chess.com Public API</p>
+    <p class="footer-sub">يعتمد على Chess.com Public API وتحليل Stockfish داخل المتصفح</p>
   </footer>
-
-</div>
-
-<!-- ============ PROMOTION MODAL ============ -->
-<div class="promo-overlay" id="promoOverlay" role="dialog" aria-modal="true">
-  <div class="promo-box">
-    <h3>اختر قطعة الترقية</h3>
-    <div class="promo-pieces" id="promoPieces"></div>
-  </div>
 </div>
 
 <script src="app-v3.js"></script>
-
 </body>
 </html>
