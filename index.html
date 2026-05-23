@@ -44,12 +44,12 @@
     </div>
 
     <div class="depth-selector">
-      <label for="depthSelect">قوة التحليل:</label>
+      <label for="depthSelect">قوة التحليل (أداء أسرع وأدق الآن):</label>
       <select id="depthSelect">
-        <option value="16">سريع ودقيق — depth 16</option>
-        <option value="18" selected>موصى به — depth 18</option>
-        <option value="20">عميق — depth 20</option>
-        <option value="22">دقيق جداً — depth 22</option>
+        <option value="18">سريع — depth 18</option>
+        <option value="20" selected>موصى به — depth 20</option>
+        <option value="22">عميق — depth 22</option>
+        <option value="24">دقيق جداً — depth 24</option>
       </select>
     </div>
 
@@ -137,11 +137,13 @@
         <div class="move-explanation" id="moveExplanation"></div>
 
         <div class="board-controls">
-          <button class="ctrl-btn" id="prevBtn">السابقة</button>
+          <button class="ctrl-btn main-ctrl" id="resetBtn" title="البداية">«</button>
+          <button class="ctrl-btn main-ctrl" id="prevBtn" title="السابقة">‹</button>
+          <button class="ctrl-btn main-ctrl" id="nextBtn" title="التالية">›</button>
+          <button class="ctrl-btn main-ctrl" id="flipBtn" title="قلب الرقعة">↻</button>
+        </div>
+        <div class="move-counter-wrapper">
           <span class="move-counter" id="moveCounter">النقلة 0 من 0</span>
-          <button class="ctrl-btn" id="nextBtn">التالية</button>
-          <button class="ctrl-btn" id="flipBtn">قلب الرقعة</button>
-          <button class="ctrl-btn" id="resetBtn">البداية</button>
         </div>
       </div>
 

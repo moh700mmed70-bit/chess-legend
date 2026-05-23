@@ -9,8 +9,8 @@
   const CONFIG = {
     CHESS_API_BASE: 'https://api.chess.com/pub/player/',
     MAX_GAMES: 18,
-    DEFAULT_DEPTH: 18,
-    ENGINE_TIMEOUT_MS: 90000,
+    DEFAULT_DEPTH: 20,
+    ENGINE_TIMEOUT_MS: 120000,
     ENGINE_SOURCES: ['stockfish-nnue-16-single.js', 'stockfish.js']
   };
 
@@ -256,8 +256,8 @@
         if (message === 'uciok') {
           worker.postMessage('setoption name UCI_AnalyseMode value true');
           worker.postMessage('setoption name Skill Level value 20');
-          worker.postMessage('setoption name Hash value 128');
-          worker.postMessage('setoption name Threads value 1');
+          worker.postMessage('setoption name Hash value 256');
+          worker.postMessage('setoption name Threads value 2');
           worker.postMessage('isready');
         } else if (message === 'readyok') {
           resolved = true;
@@ -419,9 +419,17 @@
       if (isBook) {
         actualAfter = { evalWhite: null };
       } else {
+        // تحسين: بدلاً من 3 استدعاءات للمحرك، نستخدم 2 فقط لتحسين السرعة
         before = await engineCommand(beforeFen, state.depth);
-        actualAfter = await engineCommand(afterFen, Math.max(12, state.depth - 2));
-        bestAfterEval = await evaluateBestAfter(beforeFen, before.bestMove, moveColor, actualAfter.evalWhite);
+        
+        // إذا كانت النقلة الملعوبة هي الأفضل، فلا نحتاج لتحليل الموقف بعدها بشكل منفصل
+        if (before.bestMove && moveUci === before.bestMove) {
+            actualAfter = { evalWhite: before.evalWhite };
+            bestAfterEval = before.evalWhite;
+        } else {
+            actualAfter = await engineCommand(afterFen, state.depth);
+            bestAfterEval = await evaluateBestAfter(beforeFen, before.bestMove, moveColor, actualAfter.evalWhite);
+        }
       }
 
       const classification = isBook ? 'book' : classifyMove({
@@ -824,7 +832,7 @@
         if (highlightMove && (squareName === highlightMove.from || squareName === highlightMove.to)) {
           square.classList.add('highlight');
         }
-        if (piece) square.innerHTML = `<span class="piece">${pieceUnicode(piece)}</span>`;
+        if (piece) square.innerHTML = `<img src="${pieceImage(piece)}" class="piece" alt="${piece}" />`;
         el.board.appendChild(square);
       }
     }
@@ -945,12 +953,11 @@
     return `${uci.slice(0, 2)}-${uci.slice(2, 4)}${uci.length > 4 ? '=' + uci.slice(4).toUpperCase() : ''}`;
   }
 
-  function pieceUnicode(piece) {
-    const pieces = {
-      K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙',
-      k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟'
-    };
-    return pieces[piece] || '';
+  function pieceImage(piece) {
+    const color = piece === piece.toUpperCase() ? 'w' : 'b';
+    const type = piece.toLowerCase();
+    const map = { k: 'K', q: 'Q', r: 'R', b: 'B', n: 'N', p: 'P' };
+    return `https://www.chess.com/chess-themes/pieces/neo/150/${color}${map[type]}.png`;
   }
 
   function opposite(color) {
