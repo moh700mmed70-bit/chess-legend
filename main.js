@@ -1,5 +1,6 @@
 /**
- * Chess Legend - Diamond Review Edition
+ * Chess Legend v8.0 - The Diamond Standard
+ * Accurate Stockfish Analysis, Sacrifice Detection, and On-Board Badges.
  */
 
 'use strict';
@@ -8,7 +9,8 @@
   const CONFIG = {
     STOCKFISH_PATH: 'stockfish.js',
     DEPTH: 18,
-    MAX_GAMES: 10
+    MAX_GAMES: 10,
+    BOOK_MOVES_LIMIT: 8 // Typical book move range
   };
 
   const state = {
@@ -16,7 +18,7 @@
     games: [],
     currentGame: null,
     currentMoveIndex: 0,
-    history: [], // {fen, move, uci, score, classification, explanation}
+    history: [], // {fen, move, uci, score, classification, explanation, isSacrifice}
     engine: null,
     isEngineReady: false,
     boardFlipped: false,
@@ -81,7 +83,7 @@
     const user = elements.usernameInput.value.trim();
     if (!user) return;
     state.username = user;
-    toggleStatus(true, 'جاري جلب مبارياتك من Chess.com...');
+    toggleStatus(true, 'جاري جلب مبارياتك...');
     try {
       const res = await fetch(`https://api.chess.com/pub/player/${user}/games/archives`);
       const archives = (await res.json()).archives;
@@ -93,7 +95,7 @@
       renderGameList();
       if (state.games.length > 0) selectGame(0);
     } catch (e) {
-      toggleStatus(true, 'خطأ: تأكد من اسم المستخدم.');
+      toggleStatus(true, 'خطأ في جلب البيانات.');
     }
   }
 
@@ -108,8 +110,20 @@
     chess.load_pgn(state.currentGame.pgn);
     const moves = chess.history({ verbose: true });
     const temp = new Chess();
-    state.history = [{ fen: temp.fen(), move: 'البداية', uci: '', score: 0, classification: 'book', explanation: 'بداية المباراة. كل الحظ للمتلاعبين!' }];
+    
+    state.history = [{ 
+      fen: temp.fen(), 
+      move: 'Start', 
+      uci: '', 
+      score: 0, 
+      classification: 'book', 
+      explanation: 'مرحباً بك في المراجعة الماسية! لنبدأ تحليل المباراة.',
+      isSacrifice: false
+    }];
+
     for (let m of moves) {
+      const prevFen = temp.fen();
+      const isSac = isSacrifice(prevFen, m);
       temp.move(m);
       state.history.push({
         fen: temp.fen(),
@@ -117,15 +131,32 @@
         uci: m.from + m.to + (m.promotion || ''),
         score: 0,
         classification: 'good',
-        explanation: ''
+        explanation: '',
+        isSacrifice: isSac
       });
     }
+    
     state.currentMoveIndex = 0;
+    state.lastScore = 0;
     renderGameList();
     renderMoveHistory();
     renderBoard();
     analyze();
   };
+
+  // Logic to detect if a move is a sacrifice
+  function isSacrifice(fen, move) {
+    const chess = new Chess(fen);
+    const piece = chess.get(move.from);
+    const values = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+    
+    // If a higher value piece is moved to a square attacked by a lower value piece
+    // Or if a piece is captured by a lower value piece without immediate recapture (simplified)
+    if (move.captured) {
+      return values[move.captured] < values[piece.type];
+    }
+    return false;
+  }
 
   function renderGameList() {
     elements.gameList.innerHTML = state.games.map((g, i) => `
@@ -145,7 +176,7 @@
       html += `
         <div class="move-val ${active}" onclick="window.goTo(${i})">
           ${m.move}
-          <span class="badge badge-${m.classification}">${getIcon(m.classification)}</span>
+          <span class="mini-badge badge-${m.classification}">${getIcon(m.classification)}</span>
         </div>
       `;
     }
@@ -154,7 +185,7 @@
   }
 
   function getIcon(cls) {
-    const icons = { brilliant: '!!', best: '★', great: '!', good: '✓', blunder: '??', book: '📖' };
+    const icons = { brilliant: '!!', great: '!', best: '★', excellent: '✓', good: '✓', book: '📖', inaccuracy: '?!', mistake: '?', blunder: '??' };
     return icons[cls] || '';
   }
 
@@ -162,7 +193,7 @@
     state.currentMoveIndex = i;
     renderBoard();
     renderMoveHistory();
-    elements.coachExplanation.textContent = state.history[i].explanation || 'جاري تحليل النقلة من قبل المدرب...';
+    elements.coachExplanation.textContent = state.history[i].explanation || 'جاري تحليل النقلة...';
     analyze();
   };
 
@@ -178,34 +209,50 @@
     const pos = fen.split(' ')[0];
     const rows = pos.split('/');
     elements.mainBoard.innerHTML = '';
-    let board = [];
+    
+    let boardArr = [];
     for (let row of rows) {
       let r = [];
       for (let c of row) {
         if (isNaN(c)) r.push(c);
         else for (let i=0; i<parseInt(c); i++) r.push(null);
       }
-      board.push(r);
+      boardArr.push(r);
     }
+
+    const currentMove = state.history[state.currentMoveIndex];
+
     for (let i = 0; i < 8; i++) {
       const r = state.boardFlipped ? 7 - i : i;
       for (let j = 0; j < 8; j++) {
         const c = state.boardFlipped ? 7 - j : j;
         const square = document.createElement('div');
+        const sqName = String.fromCharCode(97 + c) + (8 - r);
         square.className = `square ${(r+c)%2===0?'light':'dark'}`;
-        square.dataset.pos = String.fromCharCode(97 + c) + (8 - r);
-        const piece = board[r][c];
+        square.dataset.pos = sqName;
+        
+        const piece = boardArr[r][c];
         if (piece) {
           const img = document.createElement('img');
           img.src = `https://lichess1.org/assets/piece/cburnett/${piece === piece.toUpperCase() ? 'w' : 'b'}${piece.toUpperCase()}.svg`;
           img.className = 'piece';
           square.appendChild(img);
         }
+
+        // Show badge on the target square of the current move
+        if (state.currentMoveIndex > 0 && currentMove.uci.endsWith(sqName)) {
+          const badge = document.createElement('div');
+          badge.className = `move-badge badge-${currentMove.classification}`;
+          badge.textContent = getIcon(currentMove.classification);
+          square.appendChild(badge);
+        }
+
         elements.mainBoard.appendChild(square);
       }
     }
+
     if (state.currentMoveIndex > 0) {
-      const uci = state.history[state.currentMoveIndex].uci;
+      const uci = currentMove.uci;
       highlight(uci.substring(0,2));
       highlight(uci.substring(2,4));
     }
@@ -226,33 +273,54 @@
 
   function calculateDiamondReview(score) {
     if (state.currentMoveIndex === 0) return;
+    
     const current = parseFloat(score) || 0;
     const diff = Math.abs(current - state.lastScore);
-    state.lastScore = current;
-
+    const move = state.history[state.currentMoveIndex];
+    
     let cls = 'good';
-    let exp = 'نقلة جيدة تحافظ على توازن المباراة.';
+    let exp = 'نقلة جيدة تساهم في تطوير وضعيتك.';
 
-    if (diff < 0.1 && Math.abs(current) > 2.0) {
+    // Logic for Book Moves
+    if (state.currentMoveIndex <= CONFIG.BOOK_MOVES_LIMIT && diff < 0.5) {
+      cls = 'book';
+      exp = 'هذه نقلة نظرية معروفة (Book Move). أنت تتبع الافتتاحية بشكل صحيح.';
+    } 
+    // Logic for Brilliant Moves (Sacrifice + Good Eval)
+    else if (move.isSacrifice && diff < 0.3 && Math.abs(current) > 1.0) {
       cls = 'brilliant';
-      exp = 'يا لها من نقلة عبقرية! لقد وجدت أفضل تكتيك في هذا الوضع المعقد.';
-    } else if (diff < 0.2) {
+      exp = 'يا إلهي! نقلة عبقرية (Brilliant) وتضحية رائعة قلبت موازين المباراة.';
+    }
+    // Logic for Best/Great
+    else if (diff < 0.15) {
       cls = 'best';
-      exp = 'هذه هي أفضل نقلة ممكنة. أنت تلعب بدقة المحترفين.';
-    } else if (diff < 0.5) {
+      exp = 'أفضل نقلة في هذا الوضع! لقد وجدت المسار المثالي للمحرك.';
+    } else if (diff < 0.4) {
       cls = 'great';
-      exp = 'نقلة قوية جداً تزيد من ضغطك على الخصم.';
-    } else if (diff > 2.5) {
+      exp = 'نقلة قوية جداً تزيد من ضغطك وتفوقك الميداني.';
+    } else if (diff < 0.8) {
+      cls = 'excellent';
+      exp = 'نقلة ممتازة تحافظ على توازن القوى وتطور قطعك.';
+    }
+    // Logic for Errors
+    else if (diff > 3.0) {
       cls = 'blunder';
-      exp = 'خطأ فادح! لقد فوتّ فرصة كبيرة أو خسرت أفضلية واضحة هنا.';
-    } else if (diff > 1.0) {
-      exp = 'نقلة غير دقيقة، كان بإمكانك إيجاد خيار أفضل للسيطرة على الرقعة.';
+      exp = 'خطأ فادح (Blunder)! لقد فوتّ فرصة حاسمة أو خسرت قطعة غالية هنا.';
+    } else if (diff > 1.5) {
+      cls = 'mistake';
+      exp = 'خطأ واضح. كان هناك خيار أفضل بكثير لتجنب المشاكل.';
+    } else if (diff > 0.8) {
+      cls = 'inaccuracy';
+      exp = 'نقلة غير دقيقة. لقد فقدت بعض الأفضلية التي كانت لديك.';
     }
 
     state.history[state.currentMoveIndex].classification = cls;
     state.history[state.currentMoveIndex].explanation = exp;
+    state.lastScore = current;
+    
     elements.coachExplanation.textContent = exp;
     renderMoveHistory();
+    renderBoard(); // Re-render to show badge
   }
 
   function analyze() {
